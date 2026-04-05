@@ -1,7 +1,6 @@
 import 'dart:math';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/partner.dart';
 
 class InviteValidationResult {
@@ -31,8 +30,8 @@ class InviteValidationResult {
 }
 
 class FirestoreInviteService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final SupabaseClient _db = Supabase.instance.client;
+  final GoTrueClient _auth = Supabase.instance.client.auth;
 
   // Generate a unique 6-character invite code
   String generateInviteCode() {
@@ -57,16 +56,20 @@ class FirestoreInviteService {
       // Generate a unique invite code
       do {
         inviteCode = generateInviteCode();
-        final doc = await _firestore.collection('invites').doc(inviteCode).get();
-        isUnique = !doc.exists;
+        final existing = await _db
+            .from('invites')
+            .select('code')
+            .eq('code', inviteCode)
+            .maybeSingle();
+        isUnique = existing == null;
       } while (!isUnique);
 
       // Create invite document
-      await _firestore.collection('invites').doc(inviteCode).set({
+      await _db.from('invites').insert({
         'code': inviteCode,
-        'createdBy': user.uid,
+        'createdBy': user.id,
         'partnerA': partnerA.toJson(),
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': DateTime.now().toIso8601String(),
         'expiresAt': DateTime.now().add(const Duration(hours: 24)),
         'isUsed': false,
         'usedBy': null,
@@ -89,16 +92,11 @@ class FirestoreInviteService {
         return InviteValidationResult.invalid('User not authenticated');
       }
 
-      final docRef = _firestore.collection('invites').doc(inviteCode.toUpperCase());
-      
-      return await _firestore.runTransaction((transaction) async {
-        final doc = await transaction.get(docRef);
-        
-        if (!doc.exists) {
+      final code = inviteCode.toUpperCase();
+      final data = await _db.from('invites').select().eq('code', code).maybeSingle();
+      if (data == null) {
           return InviteValidationResult.invalid('Code does not exist. Please check the code and try again.');
-        }
-
-        final data = doc.data()!;
+      }
         
         // Check if code is already used
         if (data['isUsed'] == true) {
@@ -106,27 +104,30 @@ class FirestoreInviteService {
         }
 
         // Check if code is expired
-        final expiresAt = (data['expiresAt'] as Timestamp).toDate();
+        final expiresAt = DateTime.parse(data['expiresAt'] as String);
         if (DateTime.now().isAfter(expiresAt)) {
           return InviteValidationResult.invalid('This code has expired. Please request a new code.');
         }
 
         // Check if the same user is trying to use their own invite
-        if (data['createdBy'] == user.uid) {
+        if (data['createdBy'] == user.id) {
           return InviteValidationResult.invalid('You cannot use your own invite code.');
         }
 
         // Mark as used
-        transaction.update(docRef, {
-          'isUsed': true,
-          'usedBy': user.uid,
-          'usedAt': FieldValue.serverTimestamp(),
-          'partnerB': partnerB.toJson(),
-        });
+      await _db
+          .from('invites')
+          .update({
+            'isUsed': true,
+            'usedBy': user.id,
+            'usedAt': DateTime.now().toIso8601String(),
+            'partnerB': partnerB.toJson(),
+          })
+          .eq('code', code)
+          .eq('isUsed', false);
 
-        // Return Partner A data
-        return InviteValidationResult.success(Partner.fromJson(data['partnerA']));
-      });
+      // Return Partner A data
+      return InviteValidationResult.success(Partner.fromJson(data['partnerA']));
     } catch (e) {
       debugPrint('Error validating invite: $e');
       return InviteValidationResult.invalid('An error occurred while validating the code. Please try again.');
@@ -136,9 +137,12 @@ class FirestoreInviteService {
   // Get invite status (for Partner A to check)
   Future<Map<String, dynamic>?> getInviteStatus(String inviteCode) async {
     try {
-      final doc = await _firestore.collection('invites').doc(inviteCode.toUpperCase()).get();
-      if (doc.exists) {
-        final data = doc.data()!;
+      final data = await _db
+          .from('invites')
+          .select()
+          .eq('code', inviteCode.toUpperCase())
+          .maybeSingle();
+      if (data != null) {
         return {
           'code': data['code'],
           'isUsed': data['isUsed'],
@@ -161,13 +165,12 @@ class FirestoreInviteService {
       final user = _auth.currentUser;
       if (user == null) return [];
 
-      final querySnapshot = await _firestore
-          .collection('invites')
-          .where('createdBy', isEqualTo: user.uid)
-          .orderBy('createdAt', descending: true)
-          .get();
-
-      return querySnapshot.docs.map((doc) => doc.data()).toList();
+      final rows = await _db
+          .from('invites')
+          .select()
+          .eq('createdBy', user.id)
+          .order('createdAt', ascending: false);
+      return rows.map((row) => Map<String, dynamic>.from(row)).toList();
     } catch (e) {
       debugPrint('Error getting user invites: $e');
       return [];
@@ -178,18 +181,15 @@ class FirestoreInviteService {
   Future<void> cleanupExpiredInvites() async {
     try {
       final now = DateTime.now();
-      final querySnapshot = await _firestore
-          .collection('invites')
-          .where('expiresAt', isLessThan: now)
-          .get();
-
-      final batch = _firestore.batch();
-      for (final doc in querySnapshot.docs) {
-        batch.delete(doc.reference);
+      final rows = await _db
+          .from('invites')
+          .select('code')
+          .lt('expiresAt', now.toIso8601String());
+      if (rows.isNotEmpty) {
+        final codes = rows.map((e) => e['code']).toList();
+        await _db.from('invites').delete().inFilter('code', codes);
       }
-      
-      await batch.commit();
-      debugPrint('Cleaned up ${querySnapshot.docs.length} expired invites');
+      debugPrint('Cleaned up ${rows.length} expired invites');
     } catch (e) {
       debugPrint('Error cleaning up expired invites: $e');
     }
@@ -201,11 +201,15 @@ class FirestoreInviteService {
       final user = _auth.currentUser;
       if (user == null) return;
 
-      final docRef = _firestore.collection('invites').doc(inviteCode.toUpperCase());
-      final doc = await docRef.get();
-      
-      if (doc.exists && doc.data()!['createdBy'] == user.uid) {
-        await docRef.delete();
+      final code = inviteCode.toUpperCase();
+      final row = await _db
+          .from('invites')
+          .select('createdBy')
+          .eq('code', code)
+          .maybeSingle();
+
+      if (row != null && row['createdBy'] == user.id) {
+        await _db.from('invites').delete().eq('code', code);
       }
     } catch (e) {
       debugPrint('Error deleting invite: $e');

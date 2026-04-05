@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../chat/zego_voice_chat_screen.dart';
 import '../../providers/firebase_app_state.dart';
 import '../../theme/app_theme.dart';
@@ -25,7 +25,8 @@ class SessionWaitingRoomScreen extends StatefulWidget {
 
 class _SessionWaitingRoomScreenState extends State<SessionWaitingRoomScreen>
     with TickerProviderStateMixin {
-  late Stream<DocumentSnapshot<Map<String, dynamic>>> _sessionStream;
+  late Stream<Map<String, dynamic>?> _sessionStream;
+  final SupabaseClient _db = Supabase.instance.client;
   late AnimationController _pulseController;
   late AnimationController _fadeController;
   late Animation<double> _pulseAnimation;
@@ -34,10 +35,14 @@ class _SessionWaitingRoomScreenState extends State<SessionWaitingRoomScreen>
   @override
   void initState() {
     super.initState();
-    _sessionStream = FirebaseFirestore.instance
-        .collection('sessions')
-        .doc(widget.sessionCode)
-        .snapshots();
+    _sessionStream = _db
+        .from('sessions')
+        .stream(primaryKey: ['id'])
+        .eq('id', widget.sessionCode)
+        .map((rows) {
+          if (rows.isEmpty) return null;
+          return Map<String, dynamic>.from(rows.first);
+        });
 
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1500),
@@ -70,24 +75,31 @@ class _SessionWaitingRoomScreenState extends State<SessionWaitingRoomScreen>
   }
 
   Future<void> _joinSession() async {
-    final sessionRef = FirebaseFirestore.instance
-        .collection('sessions')
-        .doc(widget.sessionCode);
-    final sessionDoc = await sessionRef.get();
-    if (!sessionDoc.exists) {
+    final session = await _db
+        .from('sessions')
+        .select('id,participants,startTime,messages,participantStatus')
+        .eq('id', widget.sessionCode)
+        .maybeSingle();
+    if (session == null) {
       // Create session document with this user as first participant
-      await sessionRef.set({
+      await _db.from('sessions').insert({
+        'id': widget.sessionCode,
+        'startTime': DateTime.now().toIso8601String(),
+        'messages': const <Map<String, dynamic>>[],
+        'participantStatus': const {'A': true, 'B': true},
         'participants': [widget.userId],
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': DateTime.now().toIso8601String(),
+        'updatedAt': DateTime.now().toIso8601String(),
       });
     } else {
       // Add this user to participants if not already present
-      final data = sessionDoc.data()!;
-      final List participants = data['participants'] ?? [];
+      final List participants = (session['participants'] as List?) ?? [];
       if (!participants.contains(widget.userId)) {
-        await sessionRef.update({
-          'participants': FieldValue.arrayUnion([widget.userId]),
-        });
+        final updatedParticipants = [...participants.cast<String>(), widget.userId];
+        await _db.from('sessions').update({
+          'participants': updatedParticipants,
+          'updatedAt': DateTime.now().toIso8601String(),
+        }).eq('id', widget.sessionCode);
       }
     }
   }
@@ -119,12 +131,18 @@ class _SessionWaitingRoomScreenState extends State<SessionWaitingRoomScreen>
   Future<void> _leaveSession() async {
     // Remove user from participants list
     try {
-      final sessionRef = FirebaseFirestore.instance
-          .collection('sessions')
-          .doc(widget.sessionCode);
-      await sessionRef.update({
-        'participants': FieldValue.arrayRemove([widget.userId]),
-      });
+      final session = await _db
+          .from('sessions')
+          .select('participants')
+          .eq('id', widget.sessionCode)
+          .maybeSingle();
+      if (session == null) return;
+      final participants = List<String>.from(session['participants'] as List? ?? []);
+      participants.remove(widget.userId);
+      await _db.from('sessions').update({
+        'participants': participants,
+        'updatedAt': DateTime.now().toIso8601String(),
+      }).eq('id', widget.sessionCode);
     } catch (e) {
       // Handle error silently or show a message
     }
@@ -173,13 +191,13 @@ class _SessionWaitingRoomScreenState extends State<SessionWaitingRoomScreen>
           child: SafeArea(
             child: FadeTransition(
               opacity: _fadeAnimation,
-              child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              child: StreamBuilder<Map<String, dynamic>?>(
                 stream: _sessionStream,
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) {
                     return _buildLoadingState();
                   }
-                  final data = snapshot.data!.data();
+                  final data = snapshot.data;
                   final participants =
                       (data?['participants'] as List?)?.cast<String>() ?? [];
                   final isReady = participants.length >= 2;

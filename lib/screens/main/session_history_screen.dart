@@ -643,7 +643,7 @@ class _SessionHistoryScreenState extends State<SessionHistoryScreen>
 
   void _startNewSession(BuildContext context, FirebaseAppState appState) {
     final sessionCode = _generateSessionCode();
-    final userId = appState.user?.uid ?? '';
+    final userId = appState.user?.id ?? '';
 
     Navigator.push(
       context,

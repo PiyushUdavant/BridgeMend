@@ -152,7 +152,7 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
 
       // Generate unique user ID for this session to avoid conflicts
       // Use Firebase UID + timestamp to ensure uniqueness
-      final firebaseUid = appState.user?.uid ?? widget.userId;
+      final firebaseUid = appState.user?.id ?? widget.userId;
       final sessionUserId =
           '${firebaseUid}_${DateTime.now().millisecondsSinceEpoch}';
 
@@ -163,7 +163,7 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
       developer.log('Room ID: ${widget.sessionCode}');
       developer.log('User ID: $sessionUserId');
       developer.log('User Name: $userName');
-      developer.log('DEBUG: appState.user?.uid = ${appState.user?.uid}');
+      developer.log('DEBUG: appState.user?.id = ${appState.user?.id}');
       developer.log('DEBUG: widget.userId = ${widget.userId}');
       developer.log(
         'DEBUG: appState.currentUserId = ${appState.currentUserId}',

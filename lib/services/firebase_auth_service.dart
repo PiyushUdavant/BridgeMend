@@ -1,27 +1,28 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthResult {
-  final UserCredential? userCredential;
+  final User? user;
   final String? errorMessage;
 
-  AuthResult({this.userCredential, this.errorMessage});
+  AuthResult({this.user, this.errorMessage});
 }
 
 class GoogleSignInResult extends AuthResult {
-  GoogleSignInResult({super.userCredential, super.errorMessage});
+  GoogleSignInResult({super.user, super.errorMessage});
 }
 
 class FirebaseAuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final GoTrueClient _auth = Supabase.instance.client.auth;
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 
   // Get current user
   User? get currentUser => _auth.currentUser;
 
   // Get auth state changes
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  Stream<User?> get authStateChanges =>
+      _auth.onAuthStateChange.map((event) => event.session?.user);
 
   // Sign in with Google
   Future<GoogleSignInResult> signInWithGoogle() async {
@@ -35,14 +36,19 @@ class FirebaseAuthService {
         return GoogleSignInResult(errorMessage: 'Sign-in cancelled by user.');
       }
 
-      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = await googleUser
+          .authentication;
+      if (googleAuth.idToken == null) {
+        return GoogleSignInResult(
+          errorMessage: 'Google sign-in did not return an ID token.',
+        );
+      }
 
-      final credential = GoogleAuthProvider.credential(
-        idToken: googleAuth.idToken,
+      final response = await _auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: googleAuth.idToken!,
       );
-
-      final userCredential = await _auth.signInWithCredential(credential);
-      return GoogleSignInResult(userCredential: userCredential);
+      return GoogleSignInResult(user: response.user);
     } catch (e) {
       debugPrint('Error signing in with Google: $e');
       return GoogleSignInResult(
@@ -64,10 +70,10 @@ class FirebaseAuthService {
   // Delete user account
   Future<void> deleteAccount() async {
     try {
-      final user = _auth.currentUser;
-      if (user != null) {
-        await user.delete();
-      }
+      throw UnsupportedError(
+        'Direct account deletion is not supported on Supabase client SDK. '
+        'Use a secure backend endpoint for this action.',
+      );
     } catch (e) {
       debugPrint('Error deleting account: $e');
       rethrow;
@@ -80,13 +86,13 @@ class FirebaseAuthService {
     if (user == null) return null;
 
     return {
-      'uid': user.uid,
+      'uid': user.id,
       'email': user.email,
-      'displayName': user.displayName,
-      'photoURL': user.photoURL,
-      'emailVerified': user.emailVerified,
-      'createdAt': user.metadata.creationTime?.toIso8601String(),
-      'lastSignInTime': user.metadata.lastSignInTime?.toIso8601String(),
+      'displayName': user.userMetadata?['full_name'],
+      'photoURL': user.userMetadata?['avatar_url'],
+      'emailVerified': user.emailConfirmedAt != null,
+      'createdAt': user.createdAt,
+      'lastSignInTime': null,
     };
   }
 
@@ -96,32 +102,26 @@ class FirebaseAuthService {
   // Sign in with email and password
   Future<AuthResult> signInWithEmail(String email, String password) async {
     try {
-      final userCredential = await _auth.signInWithEmailAndPassword(
+      final response = await _auth.signInWithPassword(
         email: email.trim(),
         password: password,
       );
-      return AuthResult(userCredential: userCredential);
-    } on FirebaseAuthException catch (e) {
+      return AuthResult(user: response.user);
+    } on AuthException catch (e) {
       String errorMessage;
       switch (e.code) {
-        case 'user-not-found':
-          errorMessage = 'No user found with this email address.';
-          break;
-        case 'wrong-password':
-          errorMessage = 'Incorrect password. Please try again.';
+        case 'invalid_credentials':
+          errorMessage = 'Invalid email or password. Please try again.';
           break;
         case 'invalid-email':
           errorMessage = 'Please enter a valid email address.';
           break;
-        case 'user-disabled':
-          errorMessage = 'This account has been disabled.';
-          break;
         case 'too-many-requests':
           errorMessage = 'Too many failed attempts. Please try again later.';
           break;
-        case 'invalid-credential':
+        case 'email_not_confirmed':
           errorMessage =
-              'Invalid email or password. Please check your credentials.';
+              'Please verify your email before signing in. Check your inbox.';
           break;
         default:
           errorMessage = 'Sign in failed: ${e.message}';
@@ -138,16 +138,12 @@ class FirebaseAuthService {
   // Sign up with email and password
   Future<AuthResult> signUpWithEmail(String email, String password) async {
     try {
-      final userCredential = await _auth.createUserWithEmailAndPassword(
+      final response = await _auth.signUp(
         email: email.trim(),
         password: password,
       );
-
-      // Send email verification
-      await userCredential.user?.sendEmailVerification();
-
-      return AuthResult(userCredential: userCredential);
-    } on FirebaseAuthException catch (e) {
+      return AuthResult(user: response.user);
+    } on AuthException catch (e) {
       String errorMessage;
       switch (e.code) {
         case 'weak-password':
@@ -177,9 +173,9 @@ class FirebaseAuthService {
   // Send password reset email
   Future<AuthResult> sendPasswordResetEmail(String email) async {
     try {
-      await _auth.sendPasswordResetEmail(email: email.trim());
-      return AuthResult(userCredential: null);
-    } on FirebaseAuthException catch (e) {
+      await _auth.resetPasswordForEmail(email.trim());
+      return AuthResult(user: null);
+    } on AuthException catch (e) {
       String errorMessage;
       switch (e.code) {
         case 'user-not-found':
@@ -204,9 +200,9 @@ class FirebaseAuthService {
   Future<AuthResult> sendEmailVerification() async {
     try {
       final user = currentUser;
-      if (user != null && !user.emailVerified) {
-        await user.sendEmailVerification();
-        return AuthResult(userCredential: null);
+      if (user != null && user.emailConfirmedAt == null && user.email != null) {
+        await _auth.resend(type: OtpType.signup, email: user.email);
+        return AuthResult(user: null);
       }
       return AuthResult(errorMessage: 'No user to verify or already verified.');
     } catch (e) {
@@ -218,7 +214,7 @@ class FirebaseAuthService {
   // Reload user to check verification status
   Future<void> reloadUser() async {
     try {
-      await currentUser?.reload();
+      await _auth.refreshSession();
     } catch (e) {
       debugPrint('Error reloading user: $e');
     }
@@ -229,20 +225,14 @@ class FirebaseAuthService {
     try {
       final user = currentUser;
       if (user != null) {
-        await user.delete();
-        return AuthResult(userCredential: null);
+        return AuthResult(
+          errorMessage:
+              'Account deletion requires a secure backend endpoint in Supabase.',
+        );
       }
       return AuthResult(errorMessage: 'No user to delete');
-    } on FirebaseAuthException catch (e) {
-      String errorMessage;
-      switch (e.code) {
-        case 'requires-recent-login':
-          errorMessage = 'Please sign in again to delete your account.';
-          break;
-        default:
-          errorMessage = 'Failed to delete account: ${e.message}';
-      }
-      return AuthResult(errorMessage: errorMessage);
+    } on AuthException catch (e) {
+      return AuthResult(errorMessage: 'Failed to delete account: ${e.message}');
     } catch (e) {
       debugPrint('Error deleting user: $e');
       return AuthResult(errorMessage: 'An unexpected error occurred.');
@@ -253,34 +243,17 @@ class FirebaseAuthService {
   bool userHasProvider(String providerId) {
     final user = currentUser;
     if (user == null) return false;
-    return user.providerData.any((info) => info.providerId == providerId);
+    final providers = (user.appMetadata['providers'] as List?) ?? const [];
+    return providers.contains(providerId);
   }
 
   // Reauthenticate with Google for sensitive operations
   Future<AuthResult> reauthenticateWithGoogle() async {
     try {
-      final user = currentUser;
-      if (user == null) {
-        return AuthResult(errorMessage: 'No authenticated user.');
-      }
-
-      await _googleSignIn.initialize();
-      final GoogleSignInAccount? googleUser = await _googleSignIn
-          .authenticate();
-
-      if (googleUser == null) {
-        return AuthResult(errorMessage: 'Reauthentication cancelled.');
-      }
-
-      final googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        idToken: googleAuth.idToken,
-      );
-
-      final cred = await user.reauthenticateWithCredential(credential);
-      return AuthResult(userCredential: cred);
-    } on FirebaseAuthException catch (e) {
-      return AuthResult(errorMessage: e.message ?? 'Reauthentication failed.');
+      final result = await signInWithGoogle();
+      return AuthResult(user: result.user, errorMessage: result.errorMessage);
+    } on AuthException catch (e) {
+      return AuthResult(errorMessage: e.message);
     } catch (e) {
       debugPrint('Error during Google reauthentication: $e');
       return AuthResult(errorMessage: 'Reauthentication failed.');
@@ -291,15 +264,9 @@ class FirebaseAuthService {
   bool get needsEmailVerification {
     final user = currentUser;
     if (user == null) return false;
-
-    // Check if this is an email/password user (not Google sign-in)
-    final isEmailPasswordUser = user.providerData.any(
-      (info) => info.providerId == 'password',
-    );
-
-    return isEmailPasswordUser && !user.emailVerified;
+    return user.emailConfirmedAt == null;
   }
 
   // Get user creation time
-  DateTime? get userCreationTime => currentUser?.metadata.creationTime;
+  DateTime? get userCreationTime => DateTime.tryParse(currentUser?.createdAt ?? '');
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:developer' as developer;
 import 'dart:async';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/partner.dart';
 import '../models/communication_session.dart';
 import '../services/firebase_auth_service.dart';
@@ -114,7 +114,7 @@ class FirebaseAppState extends ChangeNotifier {
 
   // Load user data from Firestore
   Future<void> _loadUserData() async {
-    debugPrint('🔥 Loading user data for user: ${_user?.uid}');
+    debugPrint('🔥 Loading user data for user: ${_user?.id}');
     try {
       // Load relationship data
       debugPrint('🔥 Calling getUserRelationship()...');
@@ -127,7 +127,7 @@ class FirebaseAppState extends ChangeNotifier {
         );
         _isOnboardingComplete = true;
         // Determine current user ID based on relationship data
-        if (_relationshipData!['createdBy'] == _user!.uid) {
+        if (_relationshipData!['createdBy'] == _user!.id) {
           _currentUserId = 'A';
           debugPrint('🔥 User is Partner A');
         } else {
@@ -173,10 +173,7 @@ class FirebaseAppState extends ChangeNotifier {
   // Sign in with Google
   Future<String?> signInWithGoogle() async {
     final result = await _authService.signInWithGoogle();
-    developer.log(
-      'Current Firebase user after sign-in: ${FirebaseAuth.instance.currentUser}',
-    );
-    if (result.userCredential != null) {
+    if (result.user != null) {
       return null; // Success, no error
     } else {
       return result.errorMessage ?? 'Unknown error occurred during sign-in.';
@@ -186,19 +183,7 @@ class FirebaseAppState extends ChangeNotifier {
   // Sign in with email and password
   Future<String?> signInWithEmail(String email, String password) async {
     final result = await _authService.signInWithEmail(email, password);
-    if (result.userCredential != null) {
-      // Check if email is verified for email/password users
-      final user = result.userCredential!.user!;
-      final isEmailPasswordUser = user.providerData.any(
-        (info) => info.providerId == 'password',
-      );
-
-      if (isEmailPasswordUser && !user.emailVerified) {
-        // Sign out the unverified user immediately
-        await _authService.signOut();
-        return 'Please verify your email address before signing in. Check your inbox for the verification link.';
-      }
-
+    if (result.user != null) {
       return null; // Success, no error
     } else {
       return result.errorMessage ?? 'Unknown error occurred during sign-in.';
@@ -208,7 +193,7 @@ class FirebaseAppState extends ChangeNotifier {
   // Sign up with email and password
   Future<String?> signUpWithEmail(String email, String password) async {
     final result = await _authService.signUpWithEmail(email, password);
-    if (result.userCredential != null) {
+    if (result.user != null) {
       return null; // Success, no error
     } else {
       return result.errorMessage ?? 'Unknown error occurred during sign-up.';
@@ -274,8 +259,8 @@ class FirebaseAppState extends ChangeNotifier {
     try {
       debugPrint('🔥 Starting account deletion process...');
 
-      // Delete the Firebase Auth account FIRST (before signing out)
-      debugPrint('🔥 Step 1: Deleting Firebase Auth account...');
+      // Delete the authenticated account FIRST (before signing out)
+      debugPrint('🔥 Step 1: Deleting authenticated account...');
       var result = await _authService.deleteCurrentUser().timeout(
         const Duration(seconds: 30),
         onTimeout: () {
@@ -311,12 +296,12 @@ class FirebaseAppState extends ChangeNotifier {
           return result.errorMessage;
         }
       }
-      debugPrint('🔥 Step 1: Firebase Auth account deleted successfully');
+      debugPrint('🔥 Step 1: Auth account deletion API succeeded');
 
       // Then clear all user data (relationships, sessions, etc.)
       debugPrint('🔥 Step 2: Clearing all user data...');
       if (_relationshipData != null &&
-          _relationshipData!['createdBy'] == _user?.uid) {
+          _relationshipData!['createdBy'] == _user?.id) {
         await _relationshipService
             .deleteRelationship(_relationshipData!['id'])
             .timeout(
@@ -627,7 +612,7 @@ class FirebaseAppState extends ChangeNotifier {
     try {
       // Delete relationship if user created it
       if (_relationshipData != null &&
-          _relationshipData!['createdBy'] == _user?.uid) {
+          _relationshipData!['createdBy'] == _user?.id) {
         await _relationshipService.deleteRelationship(_relationshipData!['id']);
       }
 

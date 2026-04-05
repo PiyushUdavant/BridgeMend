@@ -202,7 +202,7 @@ class _UserScoringScreenState extends State<UserScoringScreen>
         widget.currentUserId ??
         tempData?['currentUserId'] ??
         appState.currentUserId ??
-        appState.user?.uid ??
+        appState.user?.id ??
         'unknown_user';
 
     // Get partner info from relationship data

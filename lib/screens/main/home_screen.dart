@@ -488,7 +488,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _showStartSessionDialog(BuildContext context) {
     final sessionCode = _generateSessionCode();
-    final userId = context.read<FirebaseAppState>().user?.uid ?? '';
+    final userId = context.read<FirebaseAppState>().user?.id ?? '';
     showDialog(
       context: context,
       builder: (context) {
@@ -623,7 +623,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _showJoinSessionDialog(BuildContext context) {
     final controller = TextEditingController();
-    final userId = context.read<FirebaseAppState>().user?.uid ?? '';
+    final userId = context.read<FirebaseAppState>().user?.id ?? '';
     showDialog(
       context: context,
       builder: (context) {

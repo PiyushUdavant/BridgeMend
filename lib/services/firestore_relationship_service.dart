@@ -1,11 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/partner.dart';
 
 class FirestoreRelationshipService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final SupabaseClient _db = Supabase.instance.client;
+  final GoTrueClient _auth = Supabase.instance.client.auth;
 
   // Create a new relationship
   Future<String> createRelationship(Partner partnerA, String inviteCode) async {
@@ -18,16 +17,20 @@ class FirestoreRelationshipService {
       final relationshipData = {
         'partnerA': partnerA.toJson(),
         'partnerB': null, // Will be filled when partner B joins
-        'createdBy': user.uid,
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdBy': user.id,
+        'createdAt': DateTime.now().toIso8601String(),
         'inviteCode': inviteCode,
         'isActive': true,
-        'participants': [user.uid], // Will have both UIDs when partner B joins
-        'updatedAt': FieldValue.serverTimestamp(),
+        'participants': [user.id], // Will have both UIDs when partner B joins
+        'updatedAt': DateTime.now().toIso8601String(),
       };
 
-      final docRef = await _firestore.collection('relationships').add(relationshipData);
-      return docRef.id;
+      final inserted = await _db
+          .from('relationships')
+          .insert(relationshipData)
+          .select('id')
+          .single();
+      return inserted['id'] as String;
     } catch (e) {
       debugPrint('Error creating relationship: $e');
       throw Exception('Failed to create relationship: $e');
@@ -42,11 +45,26 @@ class FirestoreRelationshipService {
         throw Exception('User not authenticated');
       }
 
-      await _firestore.collection('relationships').doc(relationshipId).update({
+      final relationship = await _db
+          .from('relationships')
+          .select('participants')
+          .eq('id', relationshipId)
+          .maybeSingle();
+      if (relationship == null) {
+        throw Exception('Relationship not found');
+      }
+      final participants = List<String>.from(
+        relationship['participants'] as List? ?? const [],
+      );
+      if (!participants.contains(user.id)) {
+        participants.add(user.id);
+      }
+
+      await _db.from('relationships').update({
         'partnerB': partnerB.toJson(),
-        'participants': FieldValue.arrayUnion([user.uid]),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+        'participants': participants,
+        'updatedAt': DateTime.now().toIso8601String(),
+      }).eq('id', relationshipId);
 
       return relationshipId;
     } catch (e) {
@@ -59,28 +77,22 @@ class FirestoreRelationshipService {
   Future<Map<String, dynamic>?> getUserRelationship() async {
     try {
       final user = _auth.currentUser;
-      debugPrint('🔥 getUserRelationship: current user = ${user?.uid}');
+      debugPrint('🔥 getUserRelationship: current user = ${user?.id}');
       if (user == null) {
         debugPrint('🔥 getUserRelationship: No authenticated user');
         return null;
       }
 
-      debugPrint('🔥 getUserRelationship: Querying relationships for user ${user.uid}');
-      final querySnapshot = await _firestore
-          .collection('relationships')
-          .where('participants', arrayContains: user.uid)
-          .where('isActive', isEqualTo: true)
-          .limit(1)
-          .get();
+      debugPrint('🔥 getUserRelationship: Querying relationships for user ${user.id}');
+      final rows = await _db
+          .from('relationships')
+          .select()
+          .contains('participants', [user.id]).eq('isActive', true).limit(1);
 
-      debugPrint('🔥 getUserRelationship: Query returned ${querySnapshot.docs.length} documents');
-      
-      if (querySnapshot.docs.isNotEmpty) {
-        final doc = querySnapshot.docs.first;
-        final data = {
-          'id': doc.id,
-          ...doc.data(),
-        };
+      debugPrint('🔥 getUserRelationship: Query returned ${rows.length} documents');
+
+      if (rows.isNotEmpty) {
+        final data = Map<String, dynamic>.from(rows.first);
         debugPrint('🔥 getUserRelationship: Found relationship: ${data['id']}');
         return data;
       }
@@ -96,14 +108,12 @@ class FirestoreRelationshipService {
   // Get relationship by ID
   Future<Map<String, dynamic>?> getRelationshipById(String relationshipId) async {
     try {
-      final doc = await _firestore.collection('relationships').doc(relationshipId).get();
-      if (doc.exists) {
-        return {
-          'id': doc.id,
-          ...doc.data()!,
-        };
-      }
-      return null;
+      final row = await _db
+          .from('relationships')
+          .select()
+          .eq('id', relationshipId)
+          .maybeSingle();
+      return row == null ? null : Map<String, dynamic>.from(row);
     } catch (e) {
       debugPrint('Error getting relationship by ID: $e');
       return null;
@@ -116,10 +126,10 @@ class FirestoreRelationshipService {
       final user = _auth.currentUser;
       if (user == null) return;
 
-      await _firestore.collection('relationships').doc(relationshipId).update({
+      await _db.from('relationships').update({
         ...updates,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+        'updatedAt': DateTime.now().toIso8601String(),
+      }).eq('id', relationshipId);
     } catch (e) {
       debugPrint('Error updating relationship: $e');
     }
@@ -132,10 +142,10 @@ class FirestoreRelationshipService {
       if (user == null) return;
 
       final field = partnerId == 'A' ? 'partnerA' : 'partnerB';
-      await _firestore.collection('relationships').doc(relationshipId).update({
+      await _db.from('relationships').update({
         field: partner.toJson(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+        'updatedAt': DateTime.now().toIso8601String(),
+      }).eq('id', relationshipId);
     } catch (e) {
       debugPrint('Error updating partner: $e');
     }
@@ -148,17 +158,19 @@ class FirestoreRelationshipService {
       if (user == null) return;
 
       // Check if user is part of the relationship
-      final doc = await _firestore.collection('relationships').doc(relationshipId).get();
-      if (doc.exists) {
-        final data = doc.data()!;
+      final data = await _db
+          .from('relationships')
+          .select('participants')
+          .eq('id', relationshipId)
+          .maybeSingle();
+      if (data != null) {
         final participants = List<String>.from(data['participants'] ?? []);
-        
-        if (participants.contains(user.uid)) {
-          await _firestore.collection('relationships').doc(relationshipId).update({
+        if (participants.contains(user.id)) {
+          await _db.from('relationships').update({
             'isActive': false,
-            'deletedAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+            'deletedAt': DateTime.now().toIso8601String(),
+            'updatedAt': DateTime.now().toIso8601String(),
+          }).eq('id', relationshipId);
         }
       }
     } catch (e) {
@@ -168,16 +180,13 @@ class FirestoreRelationshipService {
 
   // Get relationship stream for real-time updates
   Stream<Map<String, dynamic>?> getRelationshipStream(String relationshipId) {
-    return _firestore
-        .collection('relationships')
-        .doc(relationshipId)
-        .snapshots()
-        .map((doc) {
-          if (doc.exists) {
-            return {
-              'id': doc.id,
-              ...doc.data()!,
-            };
+    return _db
+        .from('relationships')
+        .stream(primaryKey: ['id'])
+        .eq('id', relationshipId)
+        .map((rows) {
+          if (rows.isNotEmpty) {
+            return Map<String, dynamic>.from(rows.first);
           }
           return null;
         });
@@ -188,19 +197,18 @@ class FirestoreRelationshipService {
     final user = _auth.currentUser;
     if (user == null) return Stream.value(null);
 
-    return _firestore
-        .collection('relationships')
-        .where('participants', arrayContains: user.uid)
-        .where('isActive', isEqualTo: true)
-        .limit(1)
-        .snapshots()
-        .map((querySnapshot) {
-          if (querySnapshot.docs.isNotEmpty) {
-            final doc = querySnapshot.docs.first;
-            return {
-              'id': doc.id,
-              ...doc.data(),
-            };
+    return _db
+        .from('relationships')
+        .stream(primaryKey: ['id'])
+        .map((rows) {
+          final filtered = rows.where((row) {
+            final participants = List<String>.from(
+              row['participants'] as List? ?? const [],
+            );
+            return row['isActive'] == true && participants.contains(user.id);
+          }).toList();
+          if (filtered.isNotEmpty) {
+            return Map<String, dynamic>.from(filtered.first);
           }
           return null;
         });
@@ -209,19 +217,15 @@ class FirestoreRelationshipService {
   // Find relationship by invite code
   Future<Map<String, dynamic>?> findRelationshipByInviteCode(String inviteCode) async {
     try {
-      final querySnapshot = await _firestore
-          .collection('relationships')
-          .where('inviteCode', isEqualTo: inviteCode)
-          .where('isActive', isEqualTo: true)
-          .limit(1)
-          .get();
+      final rows = await _db
+          .from('relationships')
+          .select()
+          .eq('inviteCode', inviteCode)
+          .eq('isActive', true)
+          .limit(1);
 
-      if (querySnapshot.docs.isNotEmpty) {
-        final doc = querySnapshot.docs.first;
-        return {
-          'id': doc.id,
-          ...doc.data(),
-        };
+      if (rows.isNotEmpty) {
+        return Map<String, dynamic>.from(rows.first);
       }
       return null;
     } catch (e) {

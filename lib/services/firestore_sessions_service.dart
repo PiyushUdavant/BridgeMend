@@ -1,11 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/communication_session.dart';
 
 class FirestoreSessionsService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final SupabaseClient _db = Supabase.instance.client;
+  final GoTrueClient _auth = Supabase.instance.client.auth;
 
   // Create a new communication session
   Future<String> createSession(String relationshipId, CommunicationSession session) async {
@@ -18,13 +17,17 @@ class FirestoreSessionsService {
       final sessionData = {
         ...session.toJson(),
         'relationshipId': relationshipId,
-        'createdBy': user.uid,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'createdBy': user.id,
+        'createdAt': DateTime.now().toIso8601String(),
+        'updatedAt': DateTime.now().toIso8601String(),
       };
 
-      final docRef = await _firestore.collection('sessions').add(sessionData);
-      return docRef.id;
+      final inserted = await _db
+          .from('sessions')
+          .insert(sessionData)
+          .select('id')
+          .single();
+      return inserted['id'] as String;
     } catch (e) {
       debugPrint('Error creating session: $e');
       throw Exception('Failed to create session: $e');
@@ -45,16 +48,12 @@ class FirestoreSessionsService {
       }
 
       // Save the rating in a subcollection
-      await _firestore
-          .collection('sessions')
-          .doc(sessionId)
-          .collection('ratings')
-          .doc(raterId)
-          .set({
+      await _db.from('session_ratings').upsert({
+        'sessionId': sessionId,
         'raterId': raterId,
         'ratedPartnerId': ratedPartnerId,
         'score': score.toJson(),
-        'submittedAt': FieldValue.serverTimestamp(),
+        'submittedAt': DateTime.now().toIso8601String(),
       });
 
       debugPrint('Rating saved successfully for session $sessionId');
@@ -67,14 +66,13 @@ class FirestoreSessionsService {
   // Check if a user has already rated their partner
   Future<bool> hasUserRatedPartner(String sessionId, String userId) async {
     try {
-      final doc = await _firestore
-          .collection('sessions')
-          .doc(sessionId)
-          .collection('ratings')
-          .doc(userId)
-          .get();
-      
-      return doc.exists;
+      final row = await _db
+          .from('session_ratings')
+          .select('sessionId')
+          .eq('sessionId', sessionId)
+          .eq('raterId', userId)
+          .maybeSingle();
+      return row != null;
     } catch (e) {
       debugPrint('Error checking rating status: $e');
       return false;
@@ -84,13 +82,11 @@ class FirestoreSessionsService {
   // Check if both partners have rated each other
   Future<bool> haveBothPartnersRated(String sessionId) async {
     try {
-      final ratings = await _firestore
-          .collection('sessions')
-          .doc(sessionId)
-          .collection('ratings')
-          .get();
-      
-      return ratings.docs.length >= 2;
+      final ratings = await _db
+          .from('session_ratings')
+          .select('raterId')
+          .eq('sessionId', sessionId);
+      return ratings.length >= 2;
     } catch (e) {
       debugPrint('Error checking both partners rating status: $e');
       return false;
@@ -100,17 +96,16 @@ class FirestoreSessionsService {
   // Get all ratings for a session
   Future<List<Map<String, dynamic>>> getSessionRatings(String sessionId) async {
     try {
-      final ratings = await _firestore
-          .collection('sessions')
-          .doc(sessionId)
-          .collection('ratings')
-          .get();
-      
-      return ratings.docs.map((doc) => {
-        'raterId': doc.data()['raterId'],
-        'ratedPartnerId': doc.data()['ratedPartnerId'],
-        'score': doc.data()['score'],
-        'submittedAt': doc.data()['submittedAt'],
+      final ratings = await _db
+          .from('session_ratings')
+          .select()
+          .eq('sessionId', sessionId);
+
+      return ratings.map((row) => {
+        'raterId': row['raterId'],
+        'ratedPartnerId': row['ratedPartnerId'],
+        'score': row['score'],
+        'submittedAt': row['submittedAt'],
       }).toList();
     } catch (e) {
       debugPrint('Error getting session ratings: $e');
@@ -125,16 +120,20 @@ class FirestoreSessionsService {
       if (user == null) return;
 
       // Get the existing document to preserve waiting room data
-      final existingDoc = await _firestore.collection('sessions').doc(sessionId).get();
-      final existingData = existingDoc.data() ?? {};
+      final existingData = await _db
+              .from('sessions')
+              .select('participants,createdAt')
+              .eq('id', sessionId)
+              .maybeSingle() ??
+          {};
 
-      await _firestore.collection('sessions').doc(sessionId).update({
+      await _db.from('sessions').update({
         ...session.toJson(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedAt': DateTime.now().toIso8601String(),
         // Preserve participants from waiting room
         'participants': existingData['participants'],
         'createdAt': existingData['createdAt'],
-      });
+      }).eq('id', sessionId);
     } catch (e) {
       debugPrint('Error updating session: $e');
     }
@@ -143,11 +142,12 @@ class FirestoreSessionsService {
   // Get session by ID
   Future<CommunicationSession?> getSessionById(String sessionId) async {
     try {
-      final doc = await _firestore.collection('sessions').doc(sessionId).get();
-      if (doc.exists) {
-        return CommunicationSession.fromJson(doc.data()!);
-      }
-      return null;
+      final row = await _db
+          .from('sessions')
+          .select()
+          .eq('id', sessionId)
+          .maybeSingle();
+      return row == null ? null : CommunicationSession.fromJson(row);
     } catch (e) {
       debugPrint('Error getting session by ID: $e');
       return null;
@@ -157,15 +157,15 @@ class FirestoreSessionsService {
   // Get all sessions for a relationship
   Future<List<CommunicationSession>> getRelationshipSessions(String relationshipId, {int limit = 50}) async {
     try {
-      final querySnapshot = await _firestore
-          .collection('sessions')
-          .where('relationshipId', isEqualTo: relationshipId)
-          .orderBy('startTime', descending: true)
-          .limit(limit)
-          .get();
+      final rows = await _db
+          .from('sessions')
+          .select()
+          .eq('relationshipId', relationshipId)
+          .order('startTime', ascending: false)
+          .limit(limit);
 
-      return querySnapshot.docs
-          .map((doc) => CommunicationSession.fromJson(doc.data()))
+      return rows
+          .map((row) => CommunicationSession.fromJson(Map<String, dynamic>.from(row)))
           .toList();
     } catch (e) {
       debugPrint('Error getting relationship sessions: $e');
@@ -176,16 +176,16 @@ class FirestoreSessionsService {
   // Get completed sessions for a relationship
   Future<List<CommunicationSession>> getCompletedSessions(String relationshipId, {int limit = 20}) async {
     try {
-      final querySnapshot = await _firestore
-          .collection('sessions')
-          .where('relationshipId', isEqualTo: relationshipId)
-          .where('endTime', isNotEqualTo: null)
-          .orderBy('endTime', descending: true)
-          .limit(limit)
-          .get();
+      final rows = await _db
+          .from('sessions')
+          .select()
+          .eq('relationshipId', relationshipId)
+          .not('endTime', 'is', null)
+          .order('endTime', ascending: false)
+          .limit(limit);
 
-      return querySnapshot.docs
-          .map((doc) => CommunicationSession.fromJson(doc.data()))
+      return rows
+          .map((row) => CommunicationSession.fromJson(Map<String, dynamic>.from(row)))
           .toList();
     } catch (e) {
       debugPrint('Error getting completed sessions: $e');
@@ -196,16 +196,16 @@ class FirestoreSessionsService {
   // Get active (ongoing) session for a relationship
   Future<CommunicationSession?> getActiveSession(String relationshipId) async {
     try {
-      final querySnapshot = await _firestore
-          .collection('sessions')
-          .where('relationshipId', isEqualTo: relationshipId)
-          .where('endTime', isNull: true)
-          .orderBy('startTime', descending: true)
-          .limit(1)
-          .get();
+      final rows = await _db
+          .from('sessions')
+          .select()
+          .eq('relationshipId', relationshipId)
+          .isFilter('endTime', null)
+          .order('startTime', ascending: false)
+          .limit(1);
 
-      if (querySnapshot.docs.isNotEmpty) {
-        return CommunicationSession.fromJson(querySnapshot.docs.first.data());
+      if (rows.isNotEmpty) {
+        return CommunicationSession.fromJson(rows.first);
       }
       return null;
     } catch (e) {
@@ -220,10 +220,23 @@ class FirestoreSessionsService {
       final user = _auth.currentUser;
       if (user == null) return;
 
-      await _firestore.collection('sessions').doc(sessionId).update({
-        'messages': FieldValue.arrayUnion([message.toJson()]),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      final existing = await _db
+          .from('sessions')
+          .select('messages')
+          .eq('id', sessionId)
+          .maybeSingle();
+      if (existing == null) return;
+      final messages = List<Map<String, dynamic>>.from(
+        (existing['messages'] as List? ?? const []).map(
+          (e) => Map<String, dynamic>.from(e as Map),
+        ),
+      );
+      messages.add(message.toJson());
+
+      await _db.from('sessions').update({
+        'messages': messages,
+        'updatedAt': DateTime.now().toIso8601String(),
+      }).eq('id', sessionId);
     } catch (e) {
       debugPrint('Error adding message: $e');
     }
@@ -236,10 +249,10 @@ class FirestoreSessionsService {
       if (user == null) return;
 
       debugPrint('Marking participant $participantId as left from session $sessionId');
-      await _firestore.collection('sessions').doc(sessionId).update({
+      await _db.from('sessions').update({
         'participantStatus.$participantId': false,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+        'updatedAt': DateTime.now().toIso8601String(),
+      }).eq('id', sessionId);
       debugPrint('Successfully marked participant $participantId as left');
     } catch (e) {
       debugPrint('Error marking participant as left: $e');
@@ -257,8 +270,8 @@ class FirestoreSessionsService {
       if (user == null) return;
 
       final updates = <String, dynamic>{
-        'endTime': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'endTime': DateTime.now().toIso8601String(),
+        'updatedAt': DateTime.now().toIso8601String(),
       };
 
       if (scores != null) {
@@ -273,7 +286,7 @@ class FirestoreSessionsService {
         updates['suggestedActivities'] = suggestedActivities;
       }
 
-      await _firestore.collection('sessions').doc(sessionId).update(updates);
+      await _db.from('sessions').update(updates).eq('id', sessionId);
     } catch (e) {
       debugPrint('Error ending session: $e');
     }
@@ -281,13 +294,13 @@ class FirestoreSessionsService {
 
   // Get session stream for real-time updates
   Stream<CommunicationSession?> getSessionStream(String sessionId) {
-    return _firestore
-        .collection('sessions')
-        .doc(sessionId)
-        .snapshots()
-        .map((doc) {
-          if (doc.exists) {
-            return CommunicationSession.fromJson(doc.data()!);
+    return _db
+        .from('sessions')
+        .stream(primaryKey: ['id'])
+        .eq('id', sessionId)
+        .map((rows) {
+          if (rows.isNotEmpty) {
+            return CommunicationSession.fromJson(rows.first);
           }
           return null;
         });
@@ -295,16 +308,17 @@ class FirestoreSessionsService {
 
   // Get active session stream for a relationship
   Stream<CommunicationSession?> getActiveSessionStream(String relationshipId) {
-    return _firestore
-        .collection('sessions')
-        .where('relationshipId', isEqualTo: relationshipId)
-        .where('endTime', isNull: true)
-        .orderBy('startTime', descending: true)
-        .limit(1)
-        .snapshots()
-        .map((querySnapshot) {
-          if (querySnapshot.docs.isNotEmpty) {
-            return CommunicationSession.fromJson(querySnapshot.docs.first.data());
+    return _db
+        .from('sessions')
+        .stream(primaryKey: ['id'])
+        .eq('relationshipId', relationshipId)
+        .map((rows) {
+          final active = rows.where((r) => r['endTime'] == null).toList();
+          if (active.isNotEmpty) {
+            active.sort(
+              (a, b) => (b['startTime'] as String).compareTo(a['startTime'] as String),
+            );
+            return CommunicationSession.fromJson(active.first);
           }
           return null;
         });
@@ -312,16 +326,16 @@ class FirestoreSessionsService {
 
   // Get relationship sessions stream
   Stream<List<CommunicationSession>> getRelationshipSessionsStream(String relationshipId, {int limit = 20}) {
-    return _firestore
-        .collection('sessions')
-        .where('relationshipId', isEqualTo: relationshipId)
-        .orderBy('startTime', descending: true)
-        .limit(limit)
-        .snapshots()
-        .map((querySnapshot) {
-          return querySnapshot.docs
-              .map((doc) => CommunicationSession.fromJson(doc.data()))
+    return _db
+        .from('sessions')
+        .stream(primaryKey: ['id'])
+        .eq('relationshipId', relationshipId)
+        .map((rows) {
+          final mapped = rows
+              .map((row) => CommunicationSession.fromJson(row))
               .toList();
+          mapped.sort((a, b) => b.startTime.compareTo(a.startTime));
+          return mapped.take(limit).toList();
         });
   }
 
@@ -332,21 +346,25 @@ class FirestoreSessionsService {
       if (user == null) return;
 
       // Check if user has permission to delete this session
-      final doc = await _firestore.collection('sessions').doc(sessionId).get();
-      if (doc.exists) {
-        final data = doc.data()!;
-        // Get the relationship to check if user is a participant
-        final relationshipDoc = await _firestore
-            .collection('relationships')
-            .doc(data['relationshipId'])
-            .get();
-        
-        if (relationshipDoc.exists) {
-          final relationshipData = relationshipDoc.data()!;
-          final participants = List<String>.from(relationshipData['participants'] ?? []);
-          
-          if (participants.contains(user.uid)) {
-            await _firestore.collection('sessions').doc(sessionId).delete();
+      final data = await _db
+          .from('sessions')
+          .select('relationshipId')
+          .eq('id', sessionId)
+          .maybeSingle();
+      if (data != null) {
+        final relationshipData = await _db
+            .from('relationships')
+            .select('participants')
+            .eq('id', data['relationshipId'])
+            .maybeSingle();
+
+        if (relationshipData != null) {
+          final participants = List<String>.from(
+            relationshipData['participants'] ?? const [],
+          );
+
+          if (participants.contains(user.id)) {
+            await _db.from('sessions').delete().eq('id', sessionId);
           }
         }
       }
