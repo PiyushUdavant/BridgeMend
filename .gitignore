@@ -39,6 +39,11 @@ app.*.symbols
 # Obfuscation related
 app.*.map.json
 
+# ML: local exports and trained weights (regenerate with scripts in ml/)
+/ml/saved_finetune/
+/ml/artifacts/
+/ml/counselor_chatbot/outputs/
+
 # Android Studio will place build artifacts here
 /android/app/debug
 /android/app/profile
