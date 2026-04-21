@@ -3,8 +3,10 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import 'dart:math' as math;
 import '../../providers/firebase_app_state.dart';
+import '../../services/bridgemend_dataset_retrieval.dart';
 import '../../services/zego_voice_service.dart';
 import '../../services/zego_token_service.dart';
 import '../../theme/app_theme.dart';
@@ -30,6 +32,12 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
     with TickerProviderStateMixin {
   // ZEGO Voice service
   late ZegoVoiceService _zegoService;
+
+  final SpeechToText _speechToText = SpeechToText();
+  bool _speechReady = false;
+  bool _speechListeningForGuidance = false;
+  String _speechLastWords = '';
+  bool _weMutedForSpeechToText = false;
 
   // Session state
   bool _isConnected = false;
@@ -123,6 +131,29 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _showMoodCheckinIfNeeded(),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initSpeechToText());
+  }
+
+  Future<void> _initSpeechToText() async {
+    try {
+      final ok = await _speechToText.initialize(
+        onError: (e) => developer.log('speech_to_text error: $e'),
+        onStatus: _onSpeechStatus,
+      );
+      if (mounted) {
+        setState(() => _speechReady = ok);
+      }
+    } catch (e) {
+      developer.log('speech_to_text init failed: $e');
+    }
+  }
+
+  void _onSpeechStatus(String status) {
+    if (status != 'done' && status != 'notListening') return;
+    if (!_speechListeningForGuidance) return;
+    _speechListeningForGuidance = false;
+    final text = _speechLastWords.trim();
+    unawaited(_finishSpeechGuidance(text));
   }
 
   void _initializeServices() async {
@@ -406,9 +437,125 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
     return suggestions[random.nextInt(suggestions.length)];
   }
 
-  void _showNewAIMessage() {
-    // Manual trigger for new AI message
-    _analyzeConversationAndSuggest();
+  /// Converts speech to text, matches keywords to bundled CSV rows, shows `ai_response`.
+  Future<void> _showNewAIMessage() async {
+    if (!_speechReady) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Speech recognition is not available on this device. Check microphone permissions.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (_speechListeningForGuidance || _speechToText.isListening) {
+      await _speechToText.stop();
+      return;
+    }
+
+    try {
+      await BridgeMendDatasetRetrieval.instance.ensureLoaded();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load guidance data: $e')),
+        );
+      }
+      return;
+    }
+
+    if (!_isMuted) {
+      await _zegoService.toggleMute();
+      if (mounted) {
+        setState(() => _isMuted = true);
+      }
+      _weMutedForSpeechToText = true;
+    }
+
+    _speechLastWords = '';
+    _speechListeningForGuidance = true;
+    if (mounted) setState(() {});
+
+    final started = await _speechToText.listen(
+      onResult: (r) => _speechLastWords = r.recognizedWords,
+      listenFor: const Duration(seconds: 45),
+      pauseFor: const Duration(seconds: 4),
+      partialResults: true,
+      cancelOnError: true,
+    );
+
+    if (!started) {
+      _speechListeningForGuidance = false;
+      await _restoreMicAfterSpeechToText();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not start listening.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _restoreMicAfterSpeechToText() async {
+    if (_weMutedForSpeechToText) {
+      await _zegoService.toggleMute();
+      _weMutedForSpeechToText = false;
+      if (mounted) {
+        setState(() => _isMuted = _zegoService.isMuted);
+      }
+    }
+  }
+
+  Future<void> _finishSpeechGuidance(String transcript) async {
+    await _restoreMicAfterSpeechToText();
+
+    if (transcript.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No speech detected. Tap again and speak clearly.'),
+          ),
+        );
+      }
+      if (mounted) setState(() {});
+      return;
+    }
+
+    try {
+      await BridgeMendDatasetRetrieval.instance.ensureLoaded();
+    } catch (_) {}
+
+    if (!mounted) return;
+    final appState = Provider.of<FirebaseAppState>(context, listen: false);
+    final partner = appState.getCurrentPartner();
+    final speaker = speakerForDatasetGender(partner?.gender ?? '');
+    final match = BridgeMendDatasetRetrieval.instance.bestMatch(
+      transcript,
+      sessionType: 'personal',
+      speaker: speaker,
+    );
+
+    final message = (match != null && match.score > 0)
+        ? match.aiResponse
+        : 'No close match in the guidance library for what we heard. Try rephrasing, or say more about how you feel.';
+
+    setState(() {
+      _currentAIMessage = message;
+      _currentTherapyCategory = 'dataset_guidance';
+    });
+    _aiMessageController.reset();
+    _aiMessageController.forward();
+    _lastSuggestionTime = DateTime.now();
+
+    if (match != null && match.score > 0 && mounted) {
+      developer.log(
+        'Dataset guidance: keywords=${match.matchedKeywords} score=${match.score}',
+      );
+    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _showMoodCheckinIfNeeded() async {
@@ -1244,12 +1391,20 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
                 : 'Enable Speaker (May Echo)',
           ),
 
-          // New AI Therapy Suggestion button
+          // Speech → text → keyword match → bundled dataset response
           _buildOldControlButton(
-            onTap: _showNewAIMessage,
-            icon: Icons.psychology_rounded,
-            isActive: false,
-            tooltip: 'Get Therapy Suggestion',
+            onTap: () => unawaited(_showNewAIMessage()),
+            icon: _speechListeningForGuidance || _speechToText.isListening
+                ? Icons.stop_circle_outlined
+                : Icons.record_voice_over_rounded,
+            isActive: _speechListeningForGuidance || _speechToText.isListening,
+            backgroundColor:
+                (_speechListeningForGuidance || _speechToText.isListening)
+                ? AppTheme.aiActive
+                : null,
+            tooltip: _speechListeningForGuidance || _speechToText.isListening
+                ? 'Stop & get guidance'
+                : 'Speak: match to guidance library',
           ),
 
           // End session button
@@ -1277,6 +1432,8 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
         return const Color(0xFF4ECDC4); // Teal
       case 'de_escalation':
         return const Color(0xFFFF8E53); // Orange
+      case 'dataset_guidance':
+        return AppTheme.aiActive;
       default:
         return AppTheme.aiActive; // Default blue
     }
@@ -1284,6 +1441,8 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
 
   String _getCategoryDisplayName() {
     switch (_currentTherapyCategory) {
+      case 'dataset_guidance':
+        return 'LIBRARY';
       case 'conflict_resolution':
         return 'CONFLICT';
       case 'emotional_regulation':
@@ -1347,6 +1506,7 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
 
   @override
   void dispose() {
+    _speechToText.stop();
     _sessionTimer?.cancel();
     _aiPromptTimer?.cancel();
     _zegoService.removeListener(_onZegoStateChanged);

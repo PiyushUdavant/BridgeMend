@@ -56,6 +56,9 @@ dependencies:
   # HTTP Requests (for AI integration)
   http: ^1.2.1
 
+  # CSV asset parsing (BridgeMend dataset retrieval)
+  csv: ^6.0.0
+
   # Charts for Dashboard
   fl_chart: ^0.68.0
 
@@ -118,6 +121,7 @@ flutter:
     - assets/logo.png
     - assets/lottie/glowing_heart.json
     - assets/lottie/ai_orb.json
+    - assets/data/bridgemend_dataset_1000.csv
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
