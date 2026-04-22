@@ -55,7 +55,7 @@ class BridgeMendDatasetRetrieval {
     'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too',
     'very', 'just', 'about', 'into', 'through', 'during', 'before', 'after',
     'above', 'below', 'up', 'down', 'out', 'off', 'over', 'under', 'again',
-    'further', 'then', 'once', 'here', 'there', 'any', 'if', 'because', 'as',
+    'further', 'then', 'once', 'here', 'there', 'any', 'if', 'because', 
     'until', 'while', 'although', 'though', 'even', 'also', 'really', 'like',
     'get', 'got', 'getting', 'go', 'going', 'went', 'come', 'came', 'want',
     'wants', 'wanted', 'try', 'tried', 'think', 'thought', 'know', 'knew',
