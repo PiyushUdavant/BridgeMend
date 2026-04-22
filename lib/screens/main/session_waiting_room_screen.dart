@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../chat/zego_voice_chat_screen.dart';
+import '../../models/communication_session.dart';
 import '../../providers/firebase_app_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/aurora_background.dart';
@@ -24,25 +27,183 @@ class SessionWaitingRoomScreen extends StatefulWidget {
 }
 
 class _SessionWaitingRoomScreenState extends State<SessionWaitingRoomScreen>
-    with TickerProviderStateMixin {
-  late Stream<Map<String, dynamic>?> _sessionStream;
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   final SupabaseClient _db = Supabase.instance.client;
   late AnimationController _pulseController;
   late AnimationController _fadeController;
   late Animation<double> _pulseAnimation;
   late Animation<double> _fadeAnimation;
+  bool _navigated = false; // Prevent double navigation
+  bool _isJoining = false; // Prevent concurrent joins
+  /// Loaded via REST after create/join so we do not depend on Realtime for first paint.
+  Map<String, dynamic>? _sessionRow;
+  bool _bootstrapping = true;
+  String? _bootstrapError;
+  StreamSubscription<List<Map<String, dynamic>>>? _sessionRealtimeSub;
+  /// Host often misses Realtime; poll until [status] advances (DB trigger keeps it in sync).
+  Timer? _participantPollTimer;
+  /// Only one auto-navigation runs at a time (poll + stream + build can all fire).
+  Future<void>? _voiceAdvanceFuture;
+  bool _endedDialogShown = false;
+  DateTime? _voiceAdvanceCooldownUntil;
+  bool _voiceAdvanceFailureSnackShown = false;
+
+  static List<String> _parseParticipantIds(dynamic raw) {
+    if (raw == null) return [];
+    if (raw is! List) return [];
+    final out = <String>[];
+    for (final e in raw) {
+      if (e == null) continue;
+      final s = e is String ? e : e.toString();
+      final t = s.trim();
+      if (t.isNotEmpty) out.add(t);
+    }
+    return out;
+  }
+
+  static List<String> _participantIds(Map<String, dynamic>? row) {
+    return _parseParticipantIds(row?['participants']);
+  }
+
+  static String _participantSignature(Map<String, dynamic>? row) {
+    final ids = List<String>.from(_participantIds(row))..sort();
+    final st = row?['status']?.toString() ?? '';
+    return '$st|${ids.join('\u001f')}';
+  }
+
+  bool _sessionRowSnapshotDiffer(Map<String, dynamic>? a, Map<String, dynamic>? b) {
+    return _participantSignature(a) != _participantSignature(b);
+  }
+
+  /// Normalized `sessions.status` (trigger-maintained).
+  static String _normStatus(Map<String, dynamic>? row) {
+    final s = row?['status']?.toString().trim().toLowerCase();
+    if (s == null || s.isEmpty) return 'waiting';
+    return s;
+  }
+
+  /// Open / sync voice when DB says both sides are in (`ready`) or call already started (`active`).
+  static bool _shouldNavigateToVoice(Map<String, dynamic>? row) {
+    final s = _normStatus(row);
+    return s == 'ready' || s == 'active';
+  }
+
+  static bool _isWaitingStatus(Map<String, dynamic>? row) =>
+      _normStatus(row) == 'waiting';
+
+  static bool _isEndedStatus(Map<String, dynamic>? row) =>
+      _normStatus(row) == 'ended';
+
+  void _stopParticipantPolling() {
+    _participantPollTimer?.cancel();
+    _participantPollTimer = null;
+  }
+
+  Future<void> _pollSessionParticipantsOnce() async {
+    if (!mounted || _navigated || _bootstrapping) return;
+    final current = _sessionRow;
+    if (_isEndedStatus(current)) {
+      _stopParticipantPolling();
+      return;
+    }
+    if (_shouldNavigateToVoice(current)) {
+      _stopParticipantPolling();
+      _tryAdvanceToVoiceChat();
+      return;
+    }
+    try {
+      final fresh = await _fetchSessionRow();
+      if (!mounted || _navigated || fresh == null) return;
+      if (_sessionRowSnapshotDiffer(current, fresh)) {
+        setState(() => _sessionRow = fresh);
+      }
+      _maybeHandleSessionEnded(fresh);
+      _tryAdvanceToVoiceChat();
+      if (_isEndedStatus(fresh) || _shouldNavigateToVoice(fresh)) {
+        _stopParticipantPolling();
+      }
+    } catch (e) {
+      debugPrint('WaitingRoom: poll failed: $e');
+    }
+  }
+
+  void _startParticipantPolling() {
+    _stopParticipantPolling();
+    unawaited(_pollSessionParticipantsOnce());
+    _participantPollTimer = Timer.periodic(
+      const Duration(milliseconds: 1200),
+      (_) => _pollSessionParticipantsOnce(),
+    );
+  }
+
+  /// Opens voice when [sessions.status] is `ready` or `active` (DB trigger + app).
+  /// [manual] from "Start Session" bypasses cooldown after a failed auto-start.
+  void _tryAdvanceToVoiceChat({bool manual = false}) {
+    if (!mounted || _navigated || _bootstrapping) return;
+    if (!_shouldNavigateToVoice(_sessionRow)) return;
+    if (manual) {
+      _voiceAdvanceCooldownUntil = null;
+      _voiceAdvanceFailureSnackShown = false;
+    } else if (_voiceAdvanceCooldownUntil != null &&
+        DateTime.now().isBefore(_voiceAdvanceCooldownUntil!)) {
+      return;
+    }
+    _voiceAdvanceFuture ??= _runVoiceAdvanceOnce().whenComplete(() {
+      _voiceAdvanceFuture = null;
+    });
+  }
+
+  Future<void> _runVoiceAdvanceOnce() async {
+    if (!mounted || _navigated) return;
+    _navigated = true;
+    try {
+      final appState = Provider.of<FirebaseAppState>(context, listen: false);
+      final ok = await appState.startCommunicationSession(
+        sessionCode: widget.sessionCode,
+      );
+      if (!ok) {
+        if (mounted) {
+          setState(() => _navigated = false);
+          _voiceAdvanceCooldownUntil =
+              DateTime.now().add(const Duration(seconds: 6));
+          if (!_voiceAdvanceFailureSnackShown) {
+            _voiceAdvanceFailureSnackShown = true;
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Could not start voice yet. Wait until two people are on this session code, '
+                  'or finish inviting your partner in Mend, then tap Start Session.',
+                ),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+        return;
+      }
+      if (!mounted || !context.mounted) {
+        if (mounted) setState(() => _navigated = false);
+        return;
+      }
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ZegoVoiceChatScreen(
+            sessionCode: widget.sessionCode,
+            userId: widget.userId,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('WaitingRoom: voice advance failed: $e');
+      if (mounted) setState(() => _navigated = false);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    _sessionStream = _db
-        .from('sessions')
-        .stream(primaryKey: ['id'])
-        .eq('id', widget.sessionCode)
-        .map((rows) {
-          if (rows.isEmpty) return null;
-          return Map<String, dynamic>.from(rows.first);
-        });
+    WidgetsBinding.instance.addObserver(this);
 
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1500),
@@ -64,43 +225,226 @@ class _SessionWaitingRoomScreenState extends State<SessionWaitingRoomScreen>
 
     _pulseController.repeat(reverse: true);
     _fadeController.forward();
-    _joinSession();
+    _bootstrapWaitingRoom();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stopParticipantPolling();
+    _disposeSessionRealtime();
     _pulseController.dispose();
     _fadeController.dispose();
     super.dispose();
   }
 
-  Future<void> _joinSession() async {
-    final session = await _db
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_pollSessionParticipantsOnce());
+    }
+  }
+
+  Future<Map<String, dynamic>?> _fetchSessionRow() async {
+    return _db
         .from('sessions')
-        .select('id,participants,startTime,messages,participantStatus')
+        .select(
+          'id,participants,startTime,messages,participantStatus,status,relationshipId',
+        )
         .eq('id', widget.sessionCode)
         .maybeSingle();
-    if (session == null) {
-      // Create session document with this user as first participant
-      await _db.from('sessions').insert({
-        'id': widget.sessionCode,
-        'startTime': DateTime.now().toIso8601String(),
-        'messages': const <Map<String, dynamic>>[],
-        'participantStatus': const {'A': true, 'B': true},
-        'participants': [widget.userId],
-        'createdAt': DateTime.now().toIso8601String(),
-        'updatedAt': DateTime.now().toIso8601String(),
-      });
-    } else {
-      // Add this user to participants if not already present
-      final List participants = (session['participants'] as List?) ?? [];
-      if (!participants.contains(widget.userId)) {
-        final updatedParticipants = [...participants.cast<String>(), widget.userId];
-        await _db.from('sessions').update({
-          'participants': updatedParticipants,
-          'updatedAt': DateTime.now().toIso8601String(),
-        }).eq('id', widget.sessionCode);
+  }
+
+  void _applySessionRowFromStream(List<Map<String, dynamic>> rows) {
+    if (rows.isEmpty) {
+      // Realtime can emit an empty batch; recover via REST poll.
+      unawaited(_pollSessionParticipantsOnce());
+      return;
+    }
+    final next = Map<String, dynamic>.from(rows.first);
+    if (!mounted) return;
+    setState(() => _sessionRow = next);
+    _maybeHandleSessionEnded(next);
+    _tryAdvanceToVoiceChat();
+  }
+
+  void _disposeSessionRealtime() {
+    _sessionRealtimeSub?.cancel();
+    _sessionRealtimeSub = null;
+  }
+
+  void _subscribeSessionRealtime() {
+    _disposeSessionRealtime();
+    _sessionRealtimeSub = _db
+        .from('sessions')
+        .stream(primaryKey: ['id'])
+        .eq('id', widget.sessionCode)
+        .listen(_applySessionRowFromStream);
+  }
+
+  void _maybeHandleSessionEnded(Map<String, dynamic>? row) {
+    if (!_isEndedStatus(row) || _endedDialogShown || !mounted || _navigated) {
+      return;
+    }
+    _endedDialogShown = true;
+    _stopParticipantPolling();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Session ended'),
+          content: const Text(
+            'This session is no longer active.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      if (mounted && context.mounted) {
+        Navigator.of(context).pop();
       }
+    });
+  }
+
+  Future<void> _bootstrapWaitingRoom() async {
+    try {
+      if (widget.userId.trim().isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _bootstrapping = false;
+          _bootstrapError =
+              'Missing your account id. Go back, sign in again, then rejoin the session.';
+        });
+        return;
+      }
+
+      _disposeSessionRealtime();
+
+      await _joinSession();
+      if (!mounted) return;
+
+      // Subscribe before fetch so we do not miss the partner's first update.
+      _subscribeSessionRealtime();
+
+      var row = await _fetchSessionRow();
+      // Brief retry in case of read-after-write lag
+      for (var i = 0; i < 3 && row == null && mounted; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        row = await _fetchSessionRow();
+      }
+
+      if (!mounted) return;
+
+      if (row == null) {
+        setState(() {
+          _bootstrapping = false;
+          _bootstrapError =
+              'Could not load this session. Check your connection or try again.';
+        });
+        return;
+      }
+
+      setState(() {
+        _sessionRow = row;
+        _bootstrapping = false;
+        _bootstrapError = null;
+      });
+
+      _maybeHandleSessionEnded(row);
+
+      _startParticipantPolling();
+    } catch (e, st) {
+      debugPrint('WaitingRoom: bootstrap failed: $e\n$st');
+      if (!mounted) return;
+      final msg = e.toString();
+      setState(() {
+        _bootstrapping = false;
+        if (msg.contains('Session is full') ||
+            msg.contains('at most 2 distinct participants')) {
+          _bootstrapError =
+              'This session already has two people. Start a new session with a fresh code.';
+        } else {
+          _bootstrapError =
+              'Could not set up the session. Please go back and try again.';
+        }
+      });
+    }
+  }
+
+  Future<void> _joinSession() async {
+    if (_isJoining) return;
+    if (widget.userId.trim().isEmpty) {
+      throw Exception('Missing user id');
+    }
+    _isJoining = true;
+    try {
+      // Retry a few times to avoid race conditions when both join at once
+      const int maxAttempts = 3;
+      for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          final session = await _db
+              .from('sessions')
+              .select(
+                'id,participants,startTime,messages,participantStatus,status',
+              )
+              .eq('id', widget.sessionCode)
+              .maybeSingle();
+
+          if (session == null) {
+            // Create session document with this user as first participant
+            await _db.from('sessions').insert({
+              'id': widget.sessionCode,
+              'startTime': DateTime.now().toIso8601String(),
+              'messages': const <Map<String, dynamic>>[],
+              'participantStatus': {widget.userId: true},
+              'participants': [widget.userId],
+              'createdAt': DateTime.now().toIso8601String(),
+            });
+            debugPrint('WaitingRoom: Created session ${widget.sessionCode}');
+            break;
+          } else {
+            // Add this user to participants if not already present
+            final existingIds = _parseParticipantIds(session['participants']);
+            if (!existingIds.contains(widget.userId)) {
+              final distinct = existingIds.toSet();
+              if (distinct.length >= 2) {
+                throw Exception('Session is full (max 2 participants).');
+              }
+              final updatedParticipants = [...existingIds, widget.userId];
+              final ps = CommunicationSession.parseParticipantStatusMap(
+                session['participantStatus'],
+              );
+              for (final id in updatedParticipants) {
+                ps[id] = true;
+              }
+              // status + updatedAt: DB trigger recomputes from participants
+              await _db.from('sessions').update({
+                'participants': updatedParticipants,
+                'participantStatus': ps,
+              }).eq('id', widget.sessionCode);
+              debugPrint(
+                'WaitingRoom: Added ${widget.userId} to participants (${updatedParticipants.length})',
+              );
+            } else {
+              debugPrint('WaitingRoom: ${widget.userId} already in participants');
+            }
+            break;
+          }
+        } catch (e) {
+          debugPrint('WaitingRoom: join attempt $attempt failed: $e');
+          if (attempt == maxAttempts) rethrow;
+          // Small delay before retry
+          await Future.delayed(const Duration(milliseconds: 350));
+        }
+      }
+    } finally {
+      _isJoining = false;
     }
   }
 
@@ -137,11 +481,10 @@ class _SessionWaitingRoomScreenState extends State<SessionWaitingRoomScreen>
           .eq('id', widget.sessionCode)
           .maybeSingle();
       if (session == null) return;
-      final participants = List<String>.from(session['participants'] as List? ?? []);
+      final participants = _parseParticipantIds(session['participants']);
       participants.remove(widget.userId);
       await _db.from('sessions').update({
         'participants': participants,
-        'updatedAt': DateTime.now().toIso8601String(),
       }).eq('id', widget.sessionCode);
     } catch (e) {
       // Handle error silently or show a message
@@ -191,60 +534,108 @@ class _SessionWaitingRoomScreenState extends State<SessionWaitingRoomScreen>
           child: SafeArea(
             child: FadeTransition(
               opacity: _fadeAnimation,
-              child: StreamBuilder<Map<String, dynamic>?>(
-                stream: _sessionStream,
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return _buildLoadingState();
-                  }
-                  final data = snapshot.data;
-                  final participants =
-                      (data?['participants'] as List?)?.cast<String>() ?? [];
-                  final isReady = participants.length >= 2;
-
-                  return AnimationLimiter(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: AnimationConfiguration.toStaggeredList(
-                          duration: const Duration(milliseconds: 800),
-                          childAnimationBuilder: (widget) => SlideAnimation(
-                            verticalOffset: 50.0,
-                            child: FadeInAnimation(child: widget),
-                          ),
-                          children: [
-                            SizedBox(height: 40.h),
-
-                            // Enhanced header
-                            _buildHeaderSection(),
-
-                            SizedBox(height: 40.h),
-
-                            // Session code card
-                            _buildSessionCodeCard(),
-
-                            SizedBox(height: 40.h),
-
-                            // Status section
-                            if (!isReady)
-                              _buildWaitingState(participants.length)
-                            else
-                              _buildReadyState(),
-
-                            SizedBox(height: 40.h),
-
-                            // Tips section
-                            if (!isReady) _buildTipsSection(),
-
-                            SizedBox(height: 32.h),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
+              child: _buildWaitingRoomBody(),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWaitingRoomBody() {
+    if (_bootstrapping) {
+      return _buildLoadingState();
+    }
+    if (_bootstrapError != null && _sessionRow == null) {
+      return _buildBootstrapErrorState();
+    }
+    final data = _sessionRow;
+    final participants = _participantIds(data);
+    final waiting = _isWaitingStatus(data);
+    final showReadyOrConnecting = !waiting && !_isEndedStatus(data);
+
+    if (_shouldNavigateToVoice(data) && !_navigated) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _tryAdvanceToVoiceChat(manual: false),
+      );
+    }
+
+    return AnimationLimiter(
+      child: SingleChildScrollView(
+        child: Column(
+          children: AnimationConfiguration.toStaggeredList(
+            duration: const Duration(milliseconds: 800),
+            childAnimationBuilder: (widget) => SlideAnimation(
+              verticalOffset: 50.0,
+              child: FadeInAnimation(child: widget),
+            ),
+            children: [
+              SizedBox(height: 40.h),
+              _buildHeaderSection(),
+              SizedBox(height: 40.h),
+              _buildSessionCodeCard(),
+              SizedBox(height: 40.h),
+              if (waiting)
+                _buildWaitingState(participants.length)
+              else if (_isEndedStatus(data))
+                _buildSessionEndedPlaceholder()
+              else if (showReadyOrConnecting)
+                _buildReadyState(),
+              SizedBox(height: 40.h),
+              if (waiting) _buildTipsSection(),
+              SizedBox(height: 32.h),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSessionEndedPlaceholder() {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 24.w),
+      child: Text(
+        'This session has ended.',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppTheme.textSecondary,
+            ),
+      ),
+    );
+  }
+
+  Widget _buildBootstrapErrorState() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 24.w),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.cloud_off_rounded,
+              size: 56.w,
+              color: AppTheme.textSecondary,
+            ),
+            SizedBox(height: 16.h),
+            Text(
+              _bootstrapError ?? 'Something went wrong.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppTheme.textPrimary,
+                  ),
+            ),
+            SizedBox(height: 24.h),
+            FilledButton(
+              onPressed: () {
+                setState(() {
+                  _bootstrapping = true;
+                  _bootstrapError = null;
+                });
+                _bootstrapWaitingRoom();
+              },
+              child: const Text('Retry'),
+            ),
+          ],
         ),
       ),
     );
@@ -551,27 +942,11 @@ class _SessionWaitingRoomScreenState extends State<SessionWaitingRoomScreen>
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(16.r),
-                onTap: () async {
-                  final appState = Provider.of<FirebaseAppState>(
-                    context,
-                    listen: false,
-                  );
-                  await appState.startCommunicationSession(
-                    sessionCode: widget.sessionCode,
-                  );
-
-                  if (mounted) {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ZegoVoiceChatScreen(
-                          sessionCode: widget.sessionCode,
-                          userId: widget.userId,
-                        ),
-                      ),
-                    );
-                  }
-                },
+                onTap: _navigated
+                    ? null
+                    : () {
+                        _tryAdvanceToVoiceChat(manual: true);
+                      },
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

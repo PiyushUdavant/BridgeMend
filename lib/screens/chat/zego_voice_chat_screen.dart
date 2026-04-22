@@ -150,14 +150,16 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
       if (!mounted) return;
       final appState = Provider.of<FirebaseAppState>(context, listen: false);
 
-      // Generate unique user ID for this session to avoid conflicts
-      // Use Firebase UID + timestamp to ensure uniqueness
+      // Generate unique, ZEGO-compliant user ID for this session
       final firebaseUid = appState.user?.id ?? widget.userId;
-      final sessionUserId =
+      final rawUserId =
           '${firebaseUid}_${DateTime.now().millisecondsSinceEpoch}';
+      final sessionUserId = _sanitizeZegoUserId(rawUserId);
 
       final currentPartner = appState.getCurrentPartner();
-      final userName = currentPartner?.name ?? 'User';
+      final meta = appState.user?.userMetadata;
+      final metaName = meta?['full_name'] as String? ?? meta?['name'] as String?;
+      final userName = currentPartner?.name ?? metaName ?? appState.user?.email ?? 'User';
 
       developer.log('=== STARTING ZEGO VOICE CALL ===');
       developer.log('Room ID: ${widget.sessionCode}');
@@ -176,8 +178,10 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
       );
 
       if (token == null) {
+        final healthy = await ZegoTokenService.checkServerHealth();
         developer.log(
-          'WARNING: Could not get token from backend, joining without token',
+          'WARNING: ZEGO token missing (backendReachable=$healthy). '
+          'If your ZEGO console requires token auth, loginRoom will fail.',
         );
       } else {
         developer.log('Successfully obtained token from backend');
@@ -201,10 +205,20 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
       setState(() {
         _isInitializing = false;
       });
+      final detail = e.toString();
+      final short = detail.length > 220 ? '${detail.substring(0, 220)}…' : detail;
       _showErrorDialog(
-        'Failed to initialize voice connection. Please check your internet connection and try again.',
+        'Failed to initialize voice connection. Please check your internet connection and try again.\n\n$short',
       );
     }
+  }
+
+  // ZEGO userId rules: <= 64 chars, only [A-Za-z0-9_]
+  String _sanitizeZegoUserId(String input) {
+    final cleaned = input.replaceAll(RegExp(r'[^A-Za-z0-9_]'), '_');
+    if (cleaned.length <= 64) return cleaned;
+    // Prefer keeping the tail (likely contains timestamp uniqueness)
+    return cleaned.substring(cleaned.length - 64);
   }
 
   // Token fetching is now handled by ZegoTokenService
@@ -539,13 +553,10 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
       final currentUserId = appState.currentUserId;
       final otherPartner = appState.getOtherPartner();
 
-      print('=== VOICE CHAT ENDING DEBUG ===');
-      print('Current session: ${appState.currentSession}');
-      print('Session ID: $sessionId');
-      print('Current user ID: $currentUserId');
-      print('Other partner: $otherPartner');
-      print('Other partner ID: ${otherPartner?.id}');
-      print('Other partner name: ${otherPartner?.name}');
+      developer.log(
+        'Voice chat end: sessionId=$sessionId currentUserId=$currentUserId '
+        'otherPartner=${otherPartner?.name} (${otherPartner?.id})',
+      );
 
       // Store session data in app state for navigation
       appState.setTemporarySessionData(
@@ -562,11 +573,10 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
 
       // Navigate directly to user scoring screen
       if (mounted) {
-        print('=== NAVIGATING TO SCORING SCREEN ===');
-        print('Passing sessionId: $sessionId');
-        print('Passing currentUserId: $currentUserId');
-        print('Passing partnerName: ${otherPartner?.name}');
-        print('Passing partnerId: ${otherPartner?.id}');
+        developer.log(
+          'Navigate to UserScoringScreen sessionId=$sessionId '
+          'currentUserId=$currentUserId partner=${otherPartner?.name}',
+        );
 
         Navigator.pushReplacement(
           context,
@@ -958,12 +968,19 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
   Widget _buildPartnerViews() {
     final appState = Provider.of<FirebaseAppState>(context);
     final currentPartner = appState.getCurrentPartner();
+    final otherPartner = appState.getOtherPartner();
+    final meta = appState.user?.userMetadata;
+    final metaName = meta?['full_name'] as String? ?? meta?['name'] as String?;
+    final localName =
+        currentPartner?.name ?? metaName ?? appState.user?.email ?? 'You';
+    final remoteName =
+        otherPartner?.name ?? _zegoService.partnerName ?? 'Partner';
 
     return Row(
       children: [
         // Partner A (Local User)
         _buildPartnerView(
-          name: currentPartner?.name ?? 'You',
+          name: localName,
           isLocal: true,
           isSpeaking: _zegoService.isLocalAudioActive,
           audioLevel: _zegoService.localAudioLevel,
@@ -972,9 +989,9 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
           isLeft: true,
         ),
 
-        // Partner B (Remote Partner) - Use ZEGO partner name
+        // Partner B (Remote Partner) — relationship name until ZEGO user update arrives
         _buildPartnerView(
-          name: _zegoService.partnerName ?? 'Partner',
+          name: remoteName,
           isLocal: false,
           isSpeaking: _zegoService.isRemoteAudioActive,
           audioLevel: _zegoService.remoteAudioLevel,
@@ -1350,7 +1367,7 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
     _sessionTimer?.cancel();
     _aiPromptTimer?.cancel();
     _zegoService.removeListener(_onZegoStateChanged);
-    _zegoService.dispose();
+    unawaited(_zegoService.releaseSessionResources());
     _pulseController.dispose();
     _waveformController.dispose();
     _aiMessageController.dispose();

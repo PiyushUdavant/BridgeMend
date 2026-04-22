@@ -20,6 +20,7 @@ class FirestoreSessionsService {
         'createdBy': user.id,
         'createdAt': DateTime.now().toIso8601String(),
         'updatedAt': DateTime.now().toIso8601String(),
+        'status': session.status ?? 'active',
       };
 
       final inserted = await _db
@@ -119,23 +120,51 @@ class FirestoreSessionsService {
       final user = _auth.currentUser;
       if (user == null) return;
 
-      // Get the existing document to preserve waiting room data
+      // Preserve waiting-room fields (participants, per-user presence, status from DB)
       final existingData = await _db
               .from('sessions')
-              .select('participants,createdAt')
+              .select('participants,createdAt,participantStatus,status')
               .eq('id', sessionId)
               .maybeSingle() ??
           {};
 
-      await _db.from('sessions').update({
-        ...session.toJson(),
-        'updatedAt': DateTime.now().toIso8601String(),
-        // Preserve participants from waiting room
-        'participants': existingData['participants'],
-        'createdAt': existingData['createdAt'],
-      }).eq('id', sessionId);
+      final payload = Map<String, dynamic>.from(session.toJson());
+      // Do not overwrite user-id participantStatus from the in-memory template (A/B legacy).
+      payload.remove('participantStatus');
+      payload['participants'] = existingData['participants'];
+      payload['createdAt'] = existingData['createdAt'];
+      payload['participantStatus'] =
+          existingData['participantStatus'] ?? session.participantStatus;
+      payload['status'] = 'active';
+      payload['updatedAt'] = DateTime.now().toIso8601String();
+
+      await _db.from('sessions').update(payload).eq('id', sessionId);
     } catch (e) {
       debugPrint('Error updating session: $e');
+    }
+  }
+
+  /// Participant user ids on the waiting-room session row (for voice start without `partnerB` json).
+  Future<List<String>> getSessionParticipantIds(String sessionId) async {
+    try {
+      final row = await _db
+          .from('sessions')
+          .select('participants')
+          .eq('id', sessionId)
+          .maybeSingle();
+      if (row == null) return [];
+      final raw = row['participants'];
+      if (raw is! List) return [];
+      final out = <String>[];
+      for (final e in raw) {
+        if (e == null) continue;
+        final t = (e is String ? e : e.toString()).trim();
+        if (t.isNotEmpty) out.add(t);
+      }
+      return out;
+    } catch (e) {
+      debugPrint('getSessionParticipantIds: $e');
+      return [];
     }
   }
 
@@ -272,6 +301,7 @@ class FirestoreSessionsService {
       final updates = <String, dynamic>{
         'endTime': DateTime.now().toIso8601String(),
         'updatedAt': DateTime.now().toIso8601String(),
+        'status': 'ended',
       };
 
       if (scores != null) {

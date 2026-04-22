@@ -52,7 +52,22 @@ class FirebaseAppState extends ChangeNotifier {
   CommunicationSession? get currentSession => _currentSession;
   bool get isOnboardingComplete => _isOnboardingComplete;
   String? get currentUserId => _currentUserId;
-  bool get hasPartner => _relationshipData?['partnerB'] != null;
+  /// True if partner B is on the relationship row, or two distinct user ids are in `participants`
+  /// (covers Supabase rows where both joined but `partnerB` json was not written yet).
+  bool get hasPartner {
+    final d = _relationshipData;
+    if (d == null) return false;
+    if (d['partnerB'] != null) return true;
+    final parts = d['participants'];
+    if (parts is! List) return false;
+    final ids = <String>{};
+    for (final p in parts) {
+      if (p == null) continue;
+      final id = (p is String ? p : p.toString()).trim();
+      if (id.isNotEmpty) ids.add(id);
+    }
+    return ids.length >= 2;
+  }
   bool get isAuthenticated => _user != null;
   bool get isLoading => _isLoading;
 
@@ -337,8 +352,6 @@ class FirebaseAppState extends ChangeNotifier {
         throw Exception('User not authenticated');
       }
 
-      _currentUserId = partner.id;
-
       if (partner.id == 'A') {
         // Create relationship (no invite code)
         final relationshipId = await _relationshipService.createRelationship(
@@ -350,6 +363,7 @@ class FirebaseAppState extends ChangeNotifier {
         _relationshipData = await _relationshipService.getRelationshipById(
           relationshipId,
         );
+        _currentUserId = 'A';
         _isOnboardingComplete = true;
 
         notifyListeners();
@@ -372,8 +386,6 @@ class FirebaseAppState extends ChangeNotifier {
         return InviteJoinResult.failure('User not authenticated');
       }
 
-      _currentUserId = partner.id;
-
       // Validate the invite code
       final result = await _inviteService.validateAndUseInvite(code, partner);
 
@@ -393,6 +405,7 @@ class FirebaseAppState extends ChangeNotifier {
           _relationshipData = await _relationshipService.getRelationshipById(
             relationshipData['id'],
           );
+          _currentUserId = 'B';
           _isOnboardingComplete = true;
 
           notifyListeners();
@@ -413,16 +426,60 @@ class FirebaseAppState extends ChangeNotifier {
     }
   }
 
-  // Start a communication session
-  Future<void> startCommunicationSession({String? sessionCode}) async {
+  Map<String, bool> _presenceStatusForCurrentCouple() {
+    final out = <String, bool>{};
+    if (_user != null) out[_user!.id] = true;
+    final parts = _relationshipData?['participants'];
+    if (parts is List) {
+      for (final p in parts) {
+        final id = (p is String ? p : p.toString()).trim();
+        if (id.isNotEmpty) out[id] = true;
+      }
+    }
+    return out;
+  }
+
+  /// Returns `false` if prerequisites are missing or update/create failed (waiting room can retry).
+  Future<bool> startCommunicationSession({String? sessionCode}) async {
     try {
-      if (_relationshipData == null || !hasPartner || _user == null) return;
+      if (_user == null) {
+        debugPrint('startCommunicationSession: skipped (no user)');
+        return false;
+      }
+
+      Map<String, bool> presence;
+      if (sessionCode != null) {
+        final sessionIds =
+            await _sessionsService.getSessionParticipantIds(sessionCode);
+        if (sessionIds.length >= 2) {
+          presence = {for (final id in sessionIds) id: true};
+        } else if (_relationshipData != null && hasPartner) {
+          presence = _presenceStatusForCurrentCouple();
+        } else {
+          debugPrint(
+            'startCommunicationSession: skipped waiting-room path '
+            '(sessionParticipantCount=${sessionIds.length}, hasPartner=$hasPartner, '
+            'relationship=${_relationshipData != null})',
+          );
+          return false;
+        }
+      } else {
+        if (_relationshipData == null || !hasPartner) {
+          debugPrint(
+            'startCommunicationSession: skipped create path '
+            '(relationship=${_relationshipData != null}, hasPartner=$hasPartner)',
+          );
+          return false;
+        }
+        presence = _presenceStatusForCurrentCouple();
+      }
 
       final session = CommunicationSession(
         id: sessionCode ?? DateTime.now().millisecondsSinceEpoch.toString(),
         startTime: DateTime.now(),
         messages: [],
-        participantStatus: {'A': true, 'B': true},
+        participantStatus: presence,
+        status: sessionCode == null ? 'active' : null,
       );
 
       if (sessionCode != null) {
@@ -440,8 +497,10 @@ class FirebaseAppState extends ChangeNotifier {
       _currentSession = session;
 
       notifyListeners();
+      return true;
     } catch (e) {
       debugPrint('Error starting communication session: $e');
+      return false;
     }
   }
 
@@ -477,19 +536,19 @@ class FirebaseAppState extends ChangeNotifier {
     try {
       if (_currentSession == null ||
           _currentSessionId == null ||
-          _currentUserId == null) {
+          _user == null) {
         debugPrint(
-          'Cannot leave session - missing session info: session=$_currentSession, sessionId=$_currentSessionId, userId=$_currentUserId',
+          'Cannot leave session - missing session info: session=$_currentSession, sessionId=$_currentSessionId, userId=${_user?.id}',
         );
         return;
       }
 
       debugPrint(
-        'Leaving session: sessionId=$_currentSessionId, userId=$_currentUserId',
+        'Leaving session: sessionId=$_currentSessionId, userId=${_user!.id}',
       );
       await _sessionsService.markParticipantLeft(
         _currentSessionId!,
-        _currentUserId!,
+        _user!.id,
       );
 
       notifyListeners();
@@ -525,6 +584,7 @@ class FirebaseAppState extends ChangeNotifier {
         reflection: reflection,
         suggestedActivities: suggestedActivities ?? [],
         participantStatus: _currentSession!.participantStatus,
+        status: 'ended',
       );
 
       _sessions.insert(0, completedSession);
@@ -553,34 +613,56 @@ class FirebaseAppState extends ChangeNotifier {
     }
   }
 
-  // Get current partner
+  // Get current partner (prefer auth + createdBy; also supports legacy A/B ids)
   Partner? getCurrentPartner() {
-    if (_relationshipData == null || _currentUserId == null) return null;
+    if (_relationshipData == null || _user == null) return null;
+
+    try {
+      if (_relationshipData!['createdBy'] == _user!.id) {
+        final data = _relationshipData!['partnerA'];
+        if (data is Map<String, dynamic>) return Partner.fromJson(data);
+        return null;
+      }
+      final data = _relationshipData!['partnerB'];
+      if (data is Map<String, dynamic>) return Partner.fromJson(data);
+      return null;
+    } catch (e) {
+      debugPrint('getCurrentPartner: $e');
+    }
 
     if (_currentUserId == 'A') {
-      return _relationshipData!['partnerA'] != null
-          ? Partner.fromJson(_relationshipData!['partnerA'])
-          : null;
+      final data = _relationshipData!['partnerA'];
+      if (data is Map<String, dynamic>) return Partner.fromJson(data);
     } else if (_currentUserId == 'B') {
-      return _relationshipData!['partnerB'] != null
-          ? Partner.fromJson(_relationshipData!['partnerB'])
-          : null;
+      final data = _relationshipData!['partnerB'];
+      if (data is Map<String, dynamic>) return Partner.fromJson(data);
     }
     return null;
   }
 
   // Get other partner
   Partner? getOtherPartner() {
-    if (_relationshipData == null || _currentUserId == null) return null;
+    if (_relationshipData == null || _user == null) return null;
+
+    try {
+      if (_relationshipData!['createdBy'] == _user!.id) {
+        final data = _relationshipData!['partnerB'];
+        if (data is Map<String, dynamic>) return Partner.fromJson(data);
+        return null;
+      }
+      final data = _relationshipData!['partnerA'];
+      if (data is Map<String, dynamic>) return Partner.fromJson(data);
+      return null;
+    } catch (e) {
+      debugPrint('getOtherPartner: $e');
+    }
 
     if (_currentUserId == 'A') {
-      return _relationshipData!['partnerB'] != null
-          ? Partner.fromJson(_relationshipData!['partnerB'])
-          : null;
+      final data = _relationshipData!['partnerB'];
+      if (data is Map<String, dynamic>) return Partner.fromJson(data);
     } else if (_currentUserId == 'B') {
-      return _relationshipData!['partnerA'] != null
-          ? Partner.fromJson(_relationshipData!['partnerA'])
-          : null;
+      final data = _relationshipData!['partnerA'];
+      if (data is Map<String, dynamic>) return Partner.fromJson(data);
     }
     return null;
   }

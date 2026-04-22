@@ -1,10 +1,19 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/partner.dart';
+import 'dart:math';
 
 class FirestoreRelationshipService {
   final SupabaseClient _db = Supabase.instance.client;
   final GoTrueClient _auth = Supabase.instance.client.auth;
+
+  String _generateInviteCode({int length = 8}) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rng = Random.secure();
+    return String.fromCharCodes(
+      Iterable.generate(length, (_) => chars.codeUnitAt(rng.nextInt(chars.length))),
+    );
+  }
 
   // Create a new relationship
   Future<String> createRelationship(Partner partnerA, String inviteCode) async {
@@ -14,23 +23,42 @@ class FirestoreRelationshipService {
         throw Exception('User not authenticated');
       }
 
+      // Ensure unique, non-empty inviteCode to satisfy unique constraint
+      var code = inviteCode.trim();
+      if (code.isEmpty) {
+        code = _generateInviteCode();
+      }
+
       final relationshipData = {
         'partnerA': partnerA.toJson(),
         'partnerB': null, // Will be filled when partner B joins
         'createdBy': user.id,
         'createdAt': DateTime.now().toIso8601String(),
-        'inviteCode': inviteCode,
+        'inviteCode': code,
         'isActive': true,
         'participants': [user.id], // Will have both UIDs when partner B joins
         'updatedAt': DateTime.now().toIso8601String(),
       };
 
-      final inserted = await _db
-          .from('relationships')
-          .insert(relationshipData)
-          .select('id')
-          .single();
-      return inserted['id'] as String;
+      // Try insert, regenerate code on unique violation up to 3 times
+      for (int attempt = 0; attempt < 3; attempt++) {
+        try {
+          final inserted = await _db
+              .from('relationships')
+              .insert(relationshipData)
+              .select('id')
+              .single();
+          return inserted['id'] as String;
+        } on PostgrestException catch (e) {
+          if (e.code == '23505' &&
+              (e.message ?? '').contains('relationships_inviteCode_key')) {
+            relationshipData['inviteCode'] = _generateInviteCode();
+            continue;
+          }
+          rethrow;
+        }
+      }
+      throw Exception('Failed to create relationship: could not generate unique invite code');
     } catch (e) {
       debugPrint('Error creating relationship: $e');
       throw Exception('Failed to create relationship: $e');

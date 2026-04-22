@@ -6,7 +6,10 @@ class CommunicationSession {
   final CommunicationScores? scores;
   final String? reflection;
   final List<String> suggestedActivities;
+  /// User-id keys (and legacy 'A'/'B' from old rows) -> in-session presence flag.
   final Map<String, bool> participantStatus;
+  /// DB column when present: waiting | ready | active | ended
+  final String? status;
 
   CommunicationSession({
     required this.id,
@@ -17,6 +20,7 @@ class CommunicationSession {
     this.reflection,
     this.suggestedActivities = const [],
     this.participantStatus = const {},
+    this.status,
   });
 
   Duration get duration {
@@ -40,23 +44,60 @@ class CommunicationSession {
       'reflection': reflection,
       'suggestedActivities': suggestedActivities,
       'participantStatus': participantStatus,
+      if (status != null) 'status': status,
     };
+  }
+
+  static Map<String, bool> parseParticipantStatusMap(dynamic raw) {
+    if (raw == null || raw is! Map) return {};
+    final out = <String, bool>{};
+    raw.forEach((k, v) {
+      final key = k?.toString() ?? '';
+      if (key.isEmpty) return;
+      if (v is bool) {
+        out[key] = v;
+      } else if (v is num) {
+        out[key] = v != 0;
+      } else if (v is String) {
+        out[key] = v.toLowerCase() == 'true' || v == '1';
+      } else {
+        out[key] = true;
+      }
+    });
+    return out;
+  }
+
+  static List<Message> parseMessagesList(dynamic raw) {
+    if (raw == null || raw is! List) return [];
+    final out = <Message>[];
+    for (final e in raw) {
+      if (e is! Map) continue;
+      try {
+        out.add(Message.fromJson(Map<String, dynamic>.from(e)));
+      } catch (_) {
+        // skip malformed entries from older clients
+      }
+    }
+    return out;
   }
 
   factory CommunicationSession.fromJson(Map<String, dynamic> json) {
     return CommunicationSession(
-      id: json['id'],
-      startTime: DateTime.parse(json['startTime']),
-      endTime: json['endTime'] != null ? DateTime.parse(json['endTime']) : null,
-      messages: (json['messages'] as List)
-          .map((m) => Message.fromJson(m))
-          .toList(),
-      scores: json['scores'] != null 
-          ? CommunicationScores.fromJson(json['scores']) 
+      id: json['id'] as String,
+      startTime: DateTime.parse(json['startTime'] as String),
+      endTime: json['endTime'] != null
+          ? DateTime.parse(json['endTime'] as String)
           : null,
-      reflection: json['reflection'],
+      messages: parseMessagesList(json['messages']),
+      scores: json['scores'] != null
+          ? CommunicationScores.fromJson(
+              Map<String, dynamic>.from(json['scores'] as Map),
+            )
+          : null,
+      reflection: json['reflection'] as String?,
       suggestedActivities: List<String>.from(json['suggestedActivities'] ?? []),
-      participantStatus: Map<String, bool>.from(json['participantStatus'] ?? {}),
+      participantStatus: parseParticipantStatusMap(json['participantStatus']),
+      status: json['status'] as String?,
     );
   }
 }

@@ -84,11 +84,10 @@ class _UserScoringScreenState extends State<UserScoringScreen>
   @override
   void initState() {
     super.initState();
-    print('=== USER SCORING SCREEN INIT ===');
-    print('Received sessionId: ${widget.sessionId}');
-    print('Received currentUserId: ${widget.currentUserId}');
-    print('Received partnerName: ${widget.partnerName}');
-    print('Received partnerId: ${widget.partnerId}');
+    debugPrint(
+      'UserScoringScreen init sessionId=${widget.sessionId} '
+      'currentUserId=${widget.currentUserId} partner=${widget.partnerName} (${widget.partnerId})',
+    );
     _setupAnimations();
     _checkIfAlreadyRated();
   }
@@ -123,8 +122,8 @@ class _UserScoringScreenState extends State<UserScoringScreen>
     final sessionId = widget.sessionId ?? appState.currentSession?.id;
     final currentUserId = widget.currentUserId ?? appState.currentUserId;
 
-    print(
-      'Checking if already rated - sessionId: $sessionId, userId: $currentUserId',
+    debugPrint(
+      'Checking if already rated sessionId=$sessionId userId=$currentUserId',
     );
 
     if (sessionId == null || currentUserId == null) return;
@@ -212,18 +211,15 @@ class _UserScoringScreenState extends State<UserScoringScreen>
         appState.getOtherPartner()?.id ??
         _getPartnerIdFromRelationship(appState, currentUserId);
 
-    print(
-      'Session info - Session: $sessionId, User: $currentUserId, Partner: $partnerId',
+    debugPrint(
+      'Submit rating sessionId=$sessionId userId=$currentUserId partnerId=$partnerId '
+      'widgetSession=${widget.sessionId} widgetUser=${widget.currentUserId}',
     );
-    print(
-      'Widget params - SessionId: ${widget.sessionId}, UserId: ${widget.currentUserId}, PartnerId: ${widget.partnerId}',
-    );
-    print('Temp data: $tempData');
-    print('Relationship data: ${appState.relationshipData}');
+    debugPrint('Temp data: $tempData');
 
     if (sessionId.isEmpty || currentUserId.isEmpty || partnerId.isEmpty) {
-      print(
-        'Missing session information - sessionId: $sessionId, userId: $currentUserId, partnerId: $partnerId',
+      debugPrint(
+        'Missing session info sessionId=$sessionId userId=$currentUserId partnerId=$partnerId',
       );
       _showError('Session information not available');
       setState(() {

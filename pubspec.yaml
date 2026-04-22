@@ -37,7 +37,7 @@ dependencies:
 
   # Voice Recording & Audio
   speech_to_text: ^7.3.0
-  flutter_tts: ^4.2.0
+  flutter_tts: ^4.1.0
   record: ^5.0.4
   audioplayers: ^6.5.0
 

@@ -77,7 +77,7 @@ class _EnhancedLoginScreenState extends State<EnhancedLoginScreen>
       final error = await context.read<FirebaseAppState>().signInWithGoogle();
 
       if (error != null && mounted) {
-        _showErrorSnackBar('Failed to sign in: $error');
+        // _showErrorSnackBar('Failed to sign in: $error');
       } else if (mounted) {
         // Sign in successful - navigate to AuthWrapper
         debugPrint(

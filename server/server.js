@@ -7,8 +7,8 @@ const crypto = require('crypto');
 require("dotenv").config();
 
 // ZEGOCLOUD App credentials
-const APP_ID = 1390967091;
-const SERVER_SECRET = "c47a44d5ff4b82d828282ff1d4d510af";
+const APP_ID = 451950690;
+const SERVER_SECRET = "841ac429c3206165b8b90a04aff5cf86";
 
 // ZEGOCLOUD Token Generator Functions
 function generateToken(userID, effectiveTimeInSeconds = 86400) {

@@ -1,9 +1,9 @@
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as supa;
+import 'package:supabase/supabase.dart' as supa_core;
 
 class AuthResult {
-  final User? user;
+  final supa.User? user;
   final String? errorMessage;
 
   AuthResult({this.user, this.errorMessage});
@@ -14,41 +14,28 @@ class GoogleSignInResult extends AuthResult {
 }
 
 class FirebaseAuthService {
-  final GoTrueClient _auth = Supabase.instance.client.auth;
-  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+  final supa.GoTrueClient _auth = supa.Supabase.instance.client.auth;
 
   // Get current user
-  User? get currentUser => _auth.currentUser;
+  supa.User? get currentUser => _auth.currentUser;
 
   // Get auth state changes
-  Stream<User?> get authStateChanges =>
+  Stream<supa.User?> get authStateChanges =>
       _auth.onAuthStateChange.map((event) => event.session?.user);
 
-  // Sign in with Google
+  // Sign in with Google via Supabase OAuth (recommended)
   Future<GoogleSignInResult> signInWithGoogle() async {
     try {
-      await _googleSignIn.initialize();
-
-      final GoogleSignInAccount? googleUser = await _googleSignIn
-          .authenticate();
-
-      if (googleUser == null) {
-        return GoogleSignInResult(errorMessage: 'Sign-in cancelled by user.');
-      }
-
-      final GoogleSignInAuthentication googleAuth = await googleUser
-          .authentication;
-      if (googleAuth.idToken == null) {
-        return GoogleSignInResult(
-          errorMessage: 'Google sign-in did not return an ID token.',
-        );
-      }
-
-      final response = await _auth.signInWithIdToken(
-        provider: OAuthProvider.google,
-        idToken: googleAuth.idToken!,
+      final ok = await _auth.signInWithOAuth(
+        supa.OAuthProvider.google,
+        redirectTo: 'io.supabase.flutter://callback',
       );
-      return GoogleSignInResult(user: response.user);
+      // signInWithOAuth on mobile triggers a browser flow and returns a bool.
+      // The actual user/session will arrive via onAuthStateChange.
+      if (ok) {
+        return GoogleSignInResult(user: null);
+      }
+      return GoogleSignInResult(errorMessage: 'Sign-in flow could not start.');
     } catch (e) {
       debugPrint('Error signing in with Google: $e');
       return GoogleSignInResult(
@@ -60,7 +47,7 @@ class FirebaseAuthService {
   // Sign out
   Future<void> signOut() async {
     try {
-      await Future.wait([_auth.signOut(), _googleSignIn.signOut()]);
+      await _auth.signOut();
     } catch (e) {
       debugPrint('Error signing out: $e');
       rethrow;
@@ -107,7 +94,7 @@ class FirebaseAuthService {
         password: password,
       );
       return AuthResult(user: response.user);
-    } on AuthException catch (e) {
+    } on supa_core.AuthException catch (e) {
       String errorMessage;
       switch (e.code) {
         case 'invalid_credentials':
@@ -141,9 +128,10 @@ class FirebaseAuthService {
       final response = await _auth.signUp(
         email: email.trim(),
         password: password,
+        emailRedirectTo: 'io.supabase.flutter://callback',
       );
       return AuthResult(user: response.user);
-    } on AuthException catch (e) {
+    } on supa_core.AuthException catch (e) {
       String errorMessage;
       switch (e.code) {
         case 'weak-password':
@@ -175,7 +163,7 @@ class FirebaseAuthService {
     try {
       await _auth.resetPasswordForEmail(email.trim());
       return AuthResult(user: null);
-    } on AuthException catch (e) {
+    } on supa_core.AuthException catch (e) {
       String errorMessage;
       switch (e.code) {
         case 'user-not-found':
@@ -201,7 +189,7 @@ class FirebaseAuthService {
     try {
       final user = currentUser;
       if (user != null && user.emailConfirmedAt == null && user.email != null) {
-        await _auth.resend(type: OtpType.signup, email: user.email);
+        await _auth.resend(type: supa_core.OtpType.signup, email: user.email);
         return AuthResult(user: null);
       }
       return AuthResult(errorMessage: 'No user to verify or already verified.');
@@ -231,7 +219,7 @@ class FirebaseAuthService {
         );
       }
       return AuthResult(errorMessage: 'No user to delete');
-    } on AuthException catch (e) {
+    } on supa_core.AuthException catch (e) {
       return AuthResult(errorMessage: 'Failed to delete account: ${e.message}');
     } catch (e) {
       debugPrint('Error deleting user: $e');
@@ -252,7 +240,7 @@ class FirebaseAuthService {
     try {
       final result = await signInWithGoogle();
       return AuthResult(user: result.user, errorMessage: result.errorMessage);
-    } on AuthException catch (e) {
+    } on supa_core.AuthException catch (e) {
       return AuthResult(errorMessage: e.message);
     } catch (e) {
       debugPrint('Error during Google reauthentication: $e');

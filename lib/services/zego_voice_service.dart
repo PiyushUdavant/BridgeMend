@@ -9,9 +9,17 @@ class ZegoVoiceService extends ChangeNotifier {
   factory ZegoVoiceService() => _instance;
   ZegoVoiceService._internal();
 
+  /// Last in-flight session teardown; [initializeEngine] awaits this to avoid races.
+  Future<void>? _ongoingRelease;
+
   // ZEGOCLOUD configuration - REPLACE WITH YOUR ACTUAL VALUES
-  static const int appID = 1390967091; // Replace with your ZEGOCLOUD App ID
-  static const String appSign = "11552a1db7c26772508de5585c686f49ab126eb5f1713d3c82c442391483a734"; // Replace with your App Sign
+  static const int appID = 451950690; // Replace with your ZEGOCLOUD App ID
+  static const String appSign = "a68be212864bd561aa5a56a5126eda0110b568a95830008e7b4ec66072412528"; // Replace with your App Sign
+
+  /// ZEGO volume APIs use 0–200; default publish/play is 100.
+  static const int _playStreamVolumePercent = 200;
+  static const int _captureVolumeSpeaker = 130;
+  static const int _captureVolumeEarpiece = 140;
 
   // Connection state
   bool _isEngineInitialized = false;
@@ -57,6 +65,13 @@ class ZegoVoiceService extends ChangeNotifier {
 
   /// Initialize the ZEGO Express Engine
   Future<void> initializeEngine() async {
+    final pending = _ongoingRelease;
+    if (pending != null) {
+      try {
+        await pending;
+      } catch (_) {}
+    }
+
     if (_isEngineInitialized) return;
 
     try {
@@ -97,9 +112,9 @@ class ZegoVoiceService extends ChangeNotifier {
       ZegoAudioConfig audioConfig = ZegoAudioConfig.preset(ZegoAudioConfigPreset.HighQuality);
       await ZegoExpressEngine.instance.setAudioConfig(audioConfig);
 
-      // CRITICAL: Force disable speaker to prevent echo - use earpiece
-      await ZegoExpressEngine.instance.setAudioRouteToSpeaker(false);
-      _isSpeakerOn = false;
+      // Hands-free couples session: use loudspeaker (earpiece stays very quiet at max volume).
+      await ZegoExpressEngine.instance.setAudioRouteToSpeaker(true);
+      _isSpeakerOn = true;
 
       // Enable microphone
       await ZegoExpressEngine.instance.muteMicrophone(false);
@@ -122,10 +137,12 @@ class ZegoVoiceService extends ChangeNotifier {
       // Enable sound level monitoring for real audio visualization
       await ZegoExpressEngine.instance.startSoundLevelMonitor();
 
-      // Set audio capture volume (lower to reduce echo)
-      await ZegoExpressEngine.instance.setCaptureVolume(80);
+      await ZegoExpressEngine.instance.setCaptureVolume(_captureVolumeSpeaker);
 
-      developer.log('Audio settings configured for voice calling with enhanced echo prevention');
+      developer.log(
+        'Audio: speaker route, capture=$_captureVolumeSpeaker%, '
+        'remote play=$_playStreamVolumePercent% (set per stream)',
+      );
     } catch (e) {
       developer.log('Error configuring audio settings: $e');
     }
@@ -145,7 +162,7 @@ class ZegoVoiceService extends ChangeNotifier {
       } else if (reason == ZegoRoomStateChangedReason.LoginFailed) {
         _isConnected = false;
         developer.log('Failed to join room: $roomID, error: $errorCode');
-        onError?.call('Failed to join voice room. Please try again.');
+        onError?.call('Failed to join voice room (code: $errorCode). Please try again.');
         notifyListeners();
       }
     };
@@ -175,17 +192,20 @@ class ZegoVoiceService extends ChangeNotifier {
     };
 
     // Remote stream updates
-    ZegoExpressEngine.onRoomStreamUpdate = (String roomID, ZegoUpdateType updateType, List<ZegoStream> streamList, Map<String, dynamic> extendedData) {
+    ZegoExpressEngine.onRoomStreamUpdate =
+        (String roomID, ZegoUpdateType updateType, List<ZegoStream> streamList, Map<String, dynamic> extendedData) async {
       developer.log('Remote stream update: $updateType, streams: ${streamList.length}');
-      
+
       for (var stream in streamList) {
         if (updateType == ZegoUpdateType.Add) {
-          // Start playing the remote stream
-          ZegoExpressEngine.instance.startPlayingStream(stream.streamID);
+          await ZegoExpressEngine.instance.startPlayingStream(stream.streamID);
+          await ZegoExpressEngine.instance.setPlayVolume(
+            stream.streamID,
+            _playStreamVolumePercent,
+          );
           developer.log('Started playing remote stream: ${stream.streamID}');
         } else if (updateType == ZegoUpdateType.Delete) {
-          // Stop playing the remote stream
-          ZegoExpressEngine.instance.stopPlayingStream(stream.streamID);
+          await ZegoExpressEngine.instance.stopPlayingStream(stream.streamID);
           developer.log('Stopped playing remote stream: ${stream.streamID}');
         }
       }
@@ -324,26 +344,21 @@ class ZegoVoiceService extends ChangeNotifier {
     }
   }
 
-  /// Toggle speaker mode (for echo control) - WARNING: May cause echo
+  /// Toggle speaker vs earpiece (earpiece is quieter; speaker fits shared listening).
   Future<void> toggleSpeaker() async {
     try {
-      // SAFETY: Only allow speaker if user explicitly wants it (may cause echo)
-      if (!_isSpeakerOn) {
-        // Warning: enabling speaker can cause echo
-        developer.log('WARNING: Enabling speaker may cause echo. Use headphones!');
-      }
-      
-      await ZegoExpressEngine.instance.setAudioRouteToSpeaker(!_isSpeakerOn);
-      _isSpeakerOn = !_isSpeakerOn;
-      
-      // If speaker is enabled, reduce capture volume more to minimize echo
-      if (_isSpeakerOn) {
-        await ZegoExpressEngine.instance.setCaptureVolume(60);
-      } else {
-        await ZegoExpressEngine.instance.setCaptureVolume(80);
-      }
-      
-      developer.log('Speaker ${_isSpeakerOn ? 'enabled (echo risk)' : 'disabled (recommended)'}');
+      final nextSpeaker = !_isSpeakerOn;
+      await ZegoExpressEngine.instance.setAudioRouteToSpeaker(nextSpeaker);
+      _isSpeakerOn = nextSpeaker;
+
+      await ZegoExpressEngine.instance.setCaptureVolume(
+        _isSpeakerOn ? _captureVolumeSpeaker : _captureVolumeEarpiece,
+      );
+
+      developer.log(
+        'Audio route: ${_isSpeakerOn ? 'speaker' : 'earpiece'}, '
+        'capture=${_isSpeakerOn ? _captureVolumeSpeaker : _captureVolumeEarpiece}%',
+      );
       notifyListeners();
     } catch (e) {
       developer.log('Error toggling speaker: $e');
@@ -434,12 +449,22 @@ class ZegoVoiceService extends ChangeNotifier {
     }
   }
 
-  /// Clean shutdown
-  @override
-  Future<void> dispose() async {
-    _audioSimulationTimer?.cancel();
+  /// Tear down room + engine for this session. Safe to call multiple times; concurrent
+  /// callers share one [Future]. Do **not** call [ChangeNotifier.dispose] on this singleton.
+  Future<void> releaseSessionResources() {
+    _ongoingRelease ??= _releaseSessionResourcesImpl().whenComplete(() {
+      _ongoingRelease = null;
+    });
+    return _ongoingRelease!;
+  }
 
-    // Stop sound level monitoring
+  Future<void> _releaseSessionResourcesImpl() async {
+    onError = null;
+    onPartnerConnected = null;
+    onPartnerDisconnected = null;
+    _audioSimulationTimer?.cancel();
+    _audioSimulationTimer = null;
+
     if (_isEngineInitialized) {
       try {
         await ZegoExpressEngine.instance.stopSoundLevelMonitor();
@@ -449,29 +474,31 @@ class ZegoVoiceService extends ChangeNotifier {
       }
     }
 
-    // Leave room if still in one
     await leaveRoom();
 
-    // Destroy engine
     if (_isEngineInitialized) {
-      await ZegoExpressEngine.destroyEngine();
+      try {
+        await ZegoExpressEngine.destroyEngine();
+      } catch (e) {
+        developer.log('Error destroying ZEGO engine: $e');
+      }
       _isEngineInitialized = false;
     }
 
-    // Reset state
     _isConnected = false;
     _isLocalAudioActive = false;
     _isRemoteAudioActive = false;
     _localAudioLevel = 0.0;
     _remoteAudioLevel = 0.0;
     _isInterruption = false;
-
-    super.dispose();
+    _userID = null;
+    _partnerID = null;
+    _partnerName = null;
   }
 
   /// Force end session (for UI session end)
   Future<void> endSession() async {
-    await dispose();
+    await releaseSessionResources();
   }
 
   /// Diagnose audio pipeline for debugging

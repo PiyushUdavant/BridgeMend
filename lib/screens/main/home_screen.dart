@@ -551,7 +551,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: sessionCode));
-                          Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Session code copied!'),
