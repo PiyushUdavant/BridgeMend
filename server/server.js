@@ -3,8 +3,11 @@ const http = require("http");
 const socketIo = require("socket.io");
 const cors = require("cors");
 const helmet = require("helmet");
-const crypto = require('crypto');
-require("dotenv").config();
+const crypto = require("crypto");
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
+
+const callAnalysisRouter = require("./routes/callAnalysis");
 
 // ZEGOCLOUD App credentials
 const APP_ID = 451950690;
@@ -79,7 +82,8 @@ const io = socketIo(server, {
 // Middleware
 app.use(helmet());
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "2mb" }));
+app.use("/api/call", callAnalysisRouter);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -358,6 +362,12 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Mend signaling server running on port ${PORT}`);
   console.log(`Health check available at: http://localhost:${PORT}/health`);
+  console.log(`Call analysis API: POST http://localhost:${PORT}/api/call/analyze`);
+  if (!process.env.GEMINI_API_KEY) {
+    console.warn(
+      "Warning: GEMINI_API_KEY is not set — /api/call/analyze will fail until configured"
+    );
+  }
 });
 
 // Graceful shutdown
