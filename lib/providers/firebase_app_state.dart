@@ -45,6 +45,11 @@ class FirebaseAppState extends ChangeNotifier {
   // Temporary storage for session data during navigation
   Map<String, dynamic>? _temporarySessionData;
 
+  /// AI-generated scores from post-call analysis (before mutual partner ratings).
+  CommunicationScores? _sessionAiScores;
+  Map<String, dynamic>? _sessionAiAnalysis;
+  String? _sessionAiTranscriptSummary;
+
   // Getters
   User? get user => _user;
   Map<String, dynamic>? get relationshipData => _relationshipData;
@@ -70,6 +75,26 @@ class FirebaseAppState extends ChangeNotifier {
   }
   bool get isAuthenticated => _user != null;
   bool get isLoading => _isLoading;
+  CommunicationScores? get sessionAiScores => _sessionAiScores;
+  Map<String, dynamic>? get sessionAiAnalysis => _sessionAiAnalysis;
+  String? get sessionAiTranscriptSummary => _sessionAiTranscriptSummary;
+
+  void setSessionAiAnalysis({
+    required CommunicationScores scores,
+    required Map<String, dynamic> analysis,
+    String? transcriptSummary,
+  }) {
+    _sessionAiScores = scores;
+    _sessionAiAnalysis = analysis;
+    _sessionAiTranscriptSummary = transcriptSummary;
+    notifyListeners();
+  }
+
+  void clearSessionAiAnalysis() {
+    _sessionAiScores = null;
+    _sessionAiAnalysis = null;
+    _sessionAiTranscriptSummary = null;
+  }
 
   // Temporary session data methods
   void setTemporarySessionData({
@@ -590,6 +615,7 @@ class FirebaseAppState extends ChangeNotifier {
       _sessions.insert(0, completedSession);
       _currentSession = null;
       _currentSessionId = null;
+      clearSessionAiAnalysis();
 
       // Reload sessions to refresh insights data
       await _reloadSessions();

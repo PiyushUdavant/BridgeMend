@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 
+import '../config/api_config.dart';
+
 class ZegoTokenService {
-  // Replace with your EC2 instance URL
-  // static const String baseUrl = 'http://13.223.2.148:3000';
-  static const String baseUrl = 'https://bridgemend.onrender.com';
+  static String get baseUrl => ApiConfig.serverBaseUrl;
 
   /// Generate ZEGOCLOUD token from your backend
   static Future<String?> generateToken(String userId, String roomId) async {

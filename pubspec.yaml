@@ -52,6 +52,7 @@ dependencies:
 
   # Local Storage
   shared_preferences: ^2.2.2
+  path_provider: ^2.1.5
 
   # HTTP Requests (for AI integration)
   http: ^1.2.1
@@ -75,7 +76,7 @@ dependencies:
   google_sign_in: ^7.1.1
 
   # ZEGOCLOUD SDK for Voice Calling
-  zego_express_engine: ^3.18.0
+  zego_express_engine: ^3.21.0
 
   # SVG Support
   flutter_svg: ^2.0.9

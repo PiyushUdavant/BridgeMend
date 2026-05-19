@@ -288,6 +288,29 @@ class FirestoreSessionsService {
     }
   }
 
+  /// Persists Gemini call analysis (transcript + scores) for both partners to read.
+  Future<void> saveCallAnalysis(
+    String sessionId, {
+    required Map<String, dynamic> transcript,
+    required Map<String, dynamic> analysis,
+    required Map<String, dynamic> appScores,
+  }) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
+      await _db.from('sessions').update({
+        'aiTranscript': transcript,
+        'aiAnalysis': analysis,
+        'aiScores': appScores,
+        'aiAnalyzedAt': DateTime.now().toIso8601String(),
+        'updatedAt': DateTime.now().toIso8601String(),
+      }).eq('id', sessionId);
+    } catch (e) {
+      debugPrint('Error saving call analysis: $e');
+    }
+  }
+
   // End a session
   Future<void> endSession(String sessionId, {
     CommunicationScores? scores,

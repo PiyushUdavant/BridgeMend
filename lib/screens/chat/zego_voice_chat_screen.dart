@@ -5,8 +5,13 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import '../../providers/firebase_app_state.dart';
+import '../../services/call_analysis_service.dart';
+import '../../services/firestore_sessions_service.dart';
+import '../../services/session_call_recorder.dart';
 import '../../services/zego_voice_service.dart';
 import '../../services/zego_token_service.dart';
+import '../../models/call_analysis_result.dart';
+import '../../models/partner.dart';
 import '../../theme/app_theme.dart';
 import '../resolution/user_scoring_screen.dart';
 import '../../widgets/mood_checkin_dialog.dart';
@@ -30,6 +35,9 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
     with TickerProviderStateMixin {
   // ZEGO Voice service
   late ZegoVoiceService _zegoService;
+  final SessionCallRecorder _callRecorder = SessionCallRecorder();
+  final CallAnalysisService _callAnalysisService = CallAnalysisService();
+  final FirestoreSessionsService _sessionsService = FirestoreSessionsService();
 
   // Session state
   bool _isConnected = false;
@@ -198,6 +206,13 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
       setState(() {
         _isInitializing = false;
       });
+
+      final recordingStarted = await _callRecorder.start();
+      if (!recordingStarted) {
+        developer.log(
+          'Call recording not started (mic permission or device limitation)',
+        );
+      }
 
       developer.log('=== ZEGO VOICE CALL INITIALIZED ===');
     } catch (e) {
@@ -539,7 +554,12 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
                 children: [
                   CircularProgressIndicator(),
                   SizedBox(height: 16),
-                  Text('Ending session...'),
+                  Text('Analyzing your conversation...'),
+                  SizedBox(height: 8),
+                  Text(
+                    'This may take up to a minute',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                 ],
               ),
             ),
@@ -552,6 +572,8 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
       final sessionId = appState.currentSession?.id;
       final currentUserId = appState.currentUserId;
       final otherPartner = appState.getOtherPartner();
+      final myPartner = appState.getCurrentPartner();
+      final myUserId = appState.user?.id;
 
       developer.log(
         'Voice chat end: sessionId=$sessionId currentUserId=$currentUserId '
@@ -566,10 +588,36 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
         partnerName: otherPartner?.name,
       );
 
+      String? analysisError;
+      try {
+        await _runPostCallAnalysis(
+          appState: appState,
+          sessionId: sessionId,
+          myUserId: myUserId,
+          myName: myPartner?.name ?? 'You',
+          myGender: myPartner?.gender ?? '',
+          otherPartner: otherPartner,
+        );
+      } catch (e) {
+        analysisError = e.toString();
+        developer.log('Post-call analysis failed: $e');
+      }
+
       await _zegoService.endSession();
 
       // Close loading dialog
       if (mounted) Navigator.pop(context);
+
+      if (analysisError != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not analyze call: $analysisError. You can still rate your partner.',
+            ),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
 
       // Navigate directly to user scoring screen
       if (mounted) {
@@ -590,6 +638,69 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
           ),
         );
       }
+    }
+  }
+
+  Future<void> _runPostCallAnalysis({
+    required FirebaseAppState appState,
+    required String? sessionId,
+    required String? myUserId,
+    required String myName,
+    required String myGender,
+    required Partner? otherPartner,
+  }) async {
+    if (sessionId == null || myUserId == null || otherPartner == null) {
+      return;
+    }
+
+    final audioFile = await _callRecorder.stop();
+    if (audioFile == null) {
+      throw Exception('No call audio was captured');
+    }
+
+    try {
+      final result = await _callAnalysisService.analyzeCall(
+        sessionId: sessionId,
+        partners: [
+          CallPartnerInfo(
+            id: myUserId,
+            name: myName,
+            gender: myGender,
+          ),
+          CallPartnerInfo(
+            id: otherPartner.id,
+            name: otherPartner.name,
+            gender: otherPartner.gender,
+          ),
+        ],
+        audioFile: audioFile,
+        durationSeconds: _sessionMinutes * 60 + _sessionSeconds,
+        conflictTopic: _currentTherapyCategory,
+      );
+
+      appState.setSessionAiAnalysis(
+        scores: result.appScores,
+        analysis: result.analysis,
+        transcriptSummary: result.sessionSummary,
+      );
+
+      await _sessionsService.saveCallAnalysis(
+        sessionId,
+        transcript: result.transcript,
+        analysis: result.analysis,
+        appScores: result.appScores.toJson(),
+      );
+
+      developer.log(
+        'Call analysis saved for session $sessionId '
+        '(${result.processingTimeMs}ms)',
+      );
+    } finally {
+      try {
+        if (await audioFile.exists()) {
+          await audioFile.delete();
+        }
+      } catch (_) {}
     }
   }
 
@@ -1367,6 +1478,7 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
     _sessionTimer?.cancel();
     _aiPromptTimer?.cancel();
     _zegoService.removeListener(_onZegoStateChanged);
+    unawaited(_callRecorder.dispose());
     unawaited(_zegoService.releaseSessionResources());
     _pulseController.dispose();
     _waveformController.dispose();

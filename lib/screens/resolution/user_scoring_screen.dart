@@ -292,27 +292,41 @@ class _UserScoringScreenState extends State<UserScoringScreen>
       final ratings = await _sessionsService.getSessionRatings(sessionId);
 
       if (ratings.length == 2) {
-        // Create CommunicationScores from mutual ratings
-        final communicationScores = CommunicationScores(
-          partnerScores: {
-            for (var rating in ratings)
-              rating['ratedPartnerId']: PartnerScore.fromJson(rating['score']),
-          },
-          overallFeedback: _generateOverallFeedback(ratings),
-          improvementSuggestions: _generateImprovementSuggestions(),
-        );
-
-        // Update the session with final scores
         if (mounted) {
           final appState = context.read<FirebaseAppState>();
+          final aiScores = appState.sessionAiScores;
+          final aiAnalysis = appState.sessionAiAnalysis;
+
+          // Prefer AI feedback when available; partner ratings supply per-partner scores.
+          final communicationScores = CommunicationScores(
+            partnerScores: {
+              for (var rating in ratings)
+                rating['ratedPartnerId']: PartnerScore.fromJson(
+                  rating['score'],
+                ),
+            },
+            overallFeedback: aiScores?.overallFeedback ??
+                _generateOverallFeedback(ratings),
+            improvementSuggestions: aiScores?.improvementSuggestions.isNotEmpty ==
+                    true
+                ? aiScores!.improvementSuggestions
+                : _generateImprovementSuggestions(),
+          );
+
+          final bonding = aiAnalysis?['suggestedBondingActivities'];
+          final suggestedActivities = bonding is List && bonding.isNotEmpty
+              ? bonding.map((e) => e.toString()).toList()
+              : [
+                  'Continue practicing open communication',
+                  'Schedule regular check-ins',
+                  'Practice active listening exercises',
+                ];
+
           await appState.endCommunicationSession(
             scores: communicationScores,
-            reflection: 'Session completed with mutual partner evaluation',
-            suggestedActivities: [
-              'Continue practicing open communication',
-              'Schedule regular check-ins',
-              'Practice active listening exercises',
-            ],
+            reflection: appState.sessionAiTranscriptSummary ??
+                'Session completed with mutual partner evaluation',
+            suggestedActivities: suggestedActivities,
           );
         }
       }
@@ -505,6 +519,14 @@ class _UserScoringScreenState extends State<UserScoringScreen>
                               // Header
                               _buildHeader(displayPartnerName),
 
+                              if (appState.sessionAiTranscriptSummary !=
+                                  null) ...[
+                                SizedBox(height: 16.h),
+                                _buildAiInsightCard(
+                                  appState.sessionAiTranscriptSummary!,
+                                ),
+                              ],
+
                               SizedBox(height: 24.h),
 
                               // Criteria list
@@ -553,6 +575,49 @@ class _UserScoringScreenState extends State<UserScoringScreen>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildAiInsightCard(String summary) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(14.w),
+      decoration: AppTheme.glassmorphicDecoration(
+        borderRadius: 12,
+        hasGlow: true,
+        glowColor: AppTheme.aiActive,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.auto_awesome_rounded, color: AppTheme.aiActive, size: 20.sp),
+          SizedBox(width: 10.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'AI conversation insight',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13.sp,
+                  ),
+                ),
+                SizedBox(height: 6.h),
+                Text(
+                  summary,
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 12.sp,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
