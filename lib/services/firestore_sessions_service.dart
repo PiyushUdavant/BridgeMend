@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/call_analysis_result.dart';
 import '../models/communication_session.dart';
 
 class FirestoreSessionsService {
@@ -35,29 +36,52 @@ class FirestoreSessionsService {
     }
   }
 
-  // Save individual user rating for their partner
+  // Save individual user rating for their partner (one row per session + rater).
   Future<void> saveUserRating({
     required String sessionId,
     required String raterId,
     required String ratedPartnerId,
     required PartnerScore score,
   }) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw Exception('User not authenticated');
+    }
+
+    final payload = {
+      'sessionId': sessionId,
+      'raterId': raterId,
+      'ratedPartnerId': ratedPartnerId,
+      'score': score.toJson(),
+      'submittedAt': DateTime.now().toIso8601String(),
+    };
+
     try {
-      final user = _auth.currentUser;
-      if (user == null) {
-        throw Exception('User not authenticated');
+      await _db.from('session_ratings').upsert(
+        payload,
+        onConflict: 'sessionId,raterId',
+      );
+      debugPrint(
+        'Rating saved sessionId=$sessionId raterId=$raterId ratedPartnerId=$ratedPartnerId',
+      );
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') {
+        await _db
+            .from('session_ratings')
+            .update({
+              'ratedPartnerId': ratedPartnerId,
+              'score': score.toJson(),
+              'submittedAt': DateTime.now().toIso8601String(),
+            })
+            .eq('sessionId', sessionId)
+            .eq('raterId', raterId);
+        debugPrint(
+          'Rating updated after conflict sessionId=$sessionId raterId=$raterId',
+        );
+        return;
       }
-
-      // Save the rating in a subcollection
-      await _db.from('session_ratings').upsert({
-        'sessionId': sessionId,
-        'raterId': raterId,
-        'ratedPartnerId': ratedPartnerId,
-        'score': score.toJson(),
-        'submittedAt': DateTime.now().toIso8601String(),
-      });
-
-      debugPrint('Rating saved successfully for session $sessionId');
+      debugPrint('Error saving user rating: $e');
+      throw Exception('Failed to save rating: ${e.message}');
     } catch (e) {
       debugPrint('Error saving user rating: $e');
       throw Exception('Failed to save rating: $e');
@@ -80,14 +104,21 @@ class FirestoreSessionsService {
     }
   }
 
-  // Check if both partners have rated each other
+  // Check if both partners have rated each other (two distinct raters).
   Future<bool> haveBothPartnersRated(String sessionId) async {
     try {
       final ratings = await _db
           .from('session_ratings')
           .select('raterId')
           .eq('sessionId', sessionId);
-      return ratings.length >= 2;
+
+      final distinctRaters = ratings
+          .map((row) => row['raterId']?.toString())
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toSet();
+
+      return distinctRaters.length >= 2;
     } catch (e) {
       debugPrint('Error checking both partners rating status: $e');
       return false;
@@ -285,6 +316,37 @@ class FirestoreSessionsService {
       debugPrint('Successfully marked participant $participantId as left');
     } catch (e) {
       debugPrint('Error marking participant as left: $e');
+    }
+  }
+
+  /// Loads saved Gemini analysis for a session, if present.
+  Future<CallAnalysisResult?> getSessionAiAnalysis(String sessionId) async {
+    try {
+      final row = await _db
+          .from('sessions')
+          .select('aiTranscript, aiAnalysis, aiScores')
+          .eq('id', sessionId)
+          .maybeSingle();
+
+      if (row == null ||
+          row['aiAnalysis'] == null ||
+          row['aiScores'] == null) {
+        return null;
+      }
+
+      return CallAnalysisResult(
+        sessionId: sessionId,
+        transcript: Map<String, dynamic>.from(
+          (row['aiTranscript'] as Map?) ?? {},
+        ),
+        analysis: Map<String, dynamic>.from(row['aiAnalysis'] as Map),
+        appScores: CommunicationScores.fromJson(
+          Map<String, dynamic>.from(row['aiScores'] as Map),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error loading session AI analysis: $e');
+      return null;
     }
   }
 

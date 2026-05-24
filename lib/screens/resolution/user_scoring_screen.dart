@@ -7,7 +7,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/gradient_button.dart';
 import '../../services/firestore_sessions_service.dart';
 import '../main/home_screen.dart';
-import 'post_resolution_screen.dart';
+import 'ai_insights_intro_screen.dart';
 import '../../widgets/aurora_background.dart';
 
 class UserScoringScreen extends StatefulWidget {
@@ -120,7 +120,10 @@ class _UserScoringScreenState extends State<UserScoringScreen>
   Future<void> _checkIfAlreadyRated() async {
     final appState = context.read<FirebaseAppState>();
     final sessionId = widget.sessionId ?? appState.currentSession?.id;
-    final currentUserId = widget.currentUserId ?? appState.currentUserId;
+    final currentUserId =
+        appState.getRaterId() ??
+        widget.currentUserId ??
+        appState.currentUserId;
 
     debugPrint(
       'Checking if already rated sessionId=$sessionId userId=$currentUserId',
@@ -151,25 +154,25 @@ class _UserScoringScreenState extends State<UserScoringScreen>
     return result;
   }
 
-  String _getPartnerIdFromRelationship(
+  String? _getPartnerIdFromRelationship(
     FirebaseAppState appState,
     String currentUserId,
   ) {
     final relationshipData = appState.relationshipData;
-    if (relationshipData == null) return 'partner_unknown';
+    if (relationshipData == null) return null;
 
-    // Check if current user is partnerA or partnerB and return the other one
     final partnerA = relationshipData['partnerA'];
     final partnerB = relationshipData['partnerB'];
+    final idA = partnerA is Map ? partnerA['id']?.toString() : null;
+    final idB = partnerB is Map ? partnerB['id']?.toString() : null;
 
-    if (partnerA?['id'] == currentUserId) {
-      return partnerB?['id'] ?? 'partner_b';
-    } else if (partnerB?['id'] == currentUserId) {
-      return partnerA?['id'] ?? 'partner_a';
-    }
+    if (idA == currentUserId) return idB;
+    if (idB == currentUserId) return idA;
 
-    // Fallback
-    return 'partner_other';
+    if (currentUserId == 'A') return idB ?? 'B';
+    if (currentUserId == 'B') return idA ?? 'A';
+
+    return null;
   }
 
   Future<void> _submitRating() async {
@@ -197,19 +200,21 @@ class _UserScoringScreenState extends State<UserScoringScreen>
         appState.currentSession?.id ??
         'session_${DateTime.now().millisecondsSinceEpoch}';
 
+    // Use A/B slot ids for ratings (not Supabase auth uuid).
     String currentUserId =
+        appState.getRaterId() ??
         widget.currentUserId ??
         tempData?['currentUserId'] ??
         appState.currentUserId ??
-        appState.user?.id ??
         'unknown_user';
 
-    // Get partner info from relationship data
-    String partnerId =
+    String? partnerId =
         widget.partnerId ??
         tempData?['partnerId'] ??
-        appState.getOtherPartner()?.id ??
+        appState.getRatedPartnerId() ??
         _getPartnerIdFromRelationship(appState, currentUserId);
+
+    partnerId ??= currentUserId == 'A' ? 'B' : 'A';
 
     debugPrint(
       'Submit rating sessionId=$sessionId userId=$currentUserId partnerId=$partnerId '
@@ -217,7 +222,10 @@ class _UserScoringScreenState extends State<UserScoringScreen>
     );
     debugPrint('Temp data: $tempData');
 
-    if (sessionId.isEmpty || currentUserId.isEmpty || partnerId.isEmpty) {
+    if (sessionId.isEmpty ||
+        currentUserId.isEmpty ||
+        partnerId.isEmpty ||
+        partnerId == currentUserId) {
       debugPrint(
         'Missing session info sessionId=$sessionId userId=$currentUserId partnerId=$partnerId',
       );
@@ -269,14 +277,25 @@ class _UserScoringScreenState extends State<UserScoringScreen>
       debugPrint(
         'Rating submitted successfully. Both partners rated: $bothRated',
       );
-      debugPrint('About to show success dialog...');
+      debugPrint('About to open AI insights intro...');
 
-      // Clear temporary session data since we're done with it
-      appState.clearTemporarySessionData();
-
-      _showSuccessDialog(bothRated);
+      if (mounted) {
+        _navigateToAiInsightsIntro(bothRated);
+      }
     } catch (e) {
-      _showError('Failed to save rating: $e');
+      final message = e.toString();
+      if (message.contains('23505') || message.contains('duplicate key')) {
+        if (mounted) {
+          setState(() => _hasAlreadyRated = true);
+        }
+        if (mounted) {
+          _navigateToAiInsightsIntro(
+            await _sessionsService.haveBothPartnersRated(sessionId),
+          );
+        }
+      } else {
+        _showError('Failed to save rating: $e');
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -291,7 +310,11 @@ class _UserScoringScreenState extends State<UserScoringScreen>
       // Get both partner ratings
       final ratings = await _sessionsService.getSessionRatings(sessionId);
 
-      if (ratings.length == 2) {
+      final distinctRaters = ratings
+          .map((r) => r['raterId']?.toString())
+          .whereType<String>()
+          .toSet();
+      if (distinctRaters.length >= 2) {
         if (mounted) {
           final appState = context.read<FirebaseAppState>();
           final aiScores = appState.sessionAiScores;
@@ -412,69 +435,74 @@ class _UserScoringScreenState extends State<UserScoringScreen>
     ];
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+  String _genderForPartnerSlot(FirebaseAppState appState, String partnerId) {
+    final rel = appState.relationshipData;
+    if (rel == null) return '';
+    for (final key in ['partnerA', 'partnerB']) {
+      final raw = rel[key];
+      if (raw is Map && raw['id']?.toString() == partnerId) {
+        return raw['gender']?.toString() ?? '';
+      }
+    }
+    return '';
+  }
+
+  void _navigateToAiInsightsIntro(bool bothPartnersRated) {
+    final appState = context.read<FirebaseAppState>();
+    final temp = appState.getTemporarySessionData();
+
+    final sessionId =
+        widget.sessionId ??
+        temp?['sessionId'] ??
+        appState.currentSession?.id;
+
+    final raterId =
+        appState.getRaterId() ??
+        widget.currentUserId ??
+        temp?['currentUserId']?.toString() ??
+        'A';
+
+    final ratedPartnerId =
+        widget.partnerId ??
+        temp?['partnerId']?.toString() ??
+        appState.getRatedPartnerId() ??
+        (raterId == 'A' ? 'B' : 'A');
+
+    final ratedPartnerName =
+        widget.partnerName ??
+        temp?['partnerName']?.toString() ??
+        appState.getOtherPartner()?.name ??
+        'Partner';
+
+    final self = appState.getCurrentPartner();
+
+    if (sessionId == null || sessionId.isEmpty) {
+      _showError('Session information missing for AI insights.');
+      return;
+    }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AiInsightsIntroScreen(
+          sessionId: sessionId,
+          raterId: raterId,
+          ratedPartnerId: ratedPartnerId,
+          ratedPartnerName: ratedPartnerName,
+          selfName: self?.name ?? temp?['selfDisplayName']?.toString() ?? 'You',
+          selfGender: self?.gender ?? temp?['selfGender']?.toString() ?? '',
+          partnerGender:
+              temp?['partnerGender']?.toString() ??
+              _genderForPartnerSlot(appState, ratedPartnerId),
+          bothPartnersRated: bothPartnersRated,
+        ),
+      ),
     );
   }
 
-  void _showSuccessDialog(bool bothPartnersRated) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16.r),
-        ),
-        title: Row(
-          children: [
-            Icon(
-              Icons.check_circle_rounded,
-              color: AppTheme.successGreen,
-              size: 24.sp,
-            ),
-            SizedBox(width: 8.w),
-            Text(
-              'Rating Submitted!',
-              style: TextStyle(color: AppTheme.textPrimary, fontSize: 18.sp),
-            ),
-          ],
-        ),
-        content: Text(
-          bothPartnersRated
-              ? 'Great job! Both partners have completed their ratings. Let\'s reflect on your conversation together.'
-              : 'Thank you for rating your partner. Let\'s continue with some reflection on your conversation.',
-          style: TextStyle(color: AppTheme.textSecondary, fontSize: 14.sp),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              debugPrint(
-                'Success dialog button clicked. Navigating to Post-Resolution screen.',
-              );
-              Navigator.of(context).pop();
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => PostResolutionScreen(
-                    sessionId: widget.sessionId,
-                    currentUserId: widget.currentUserId,
-                    partnerName: widget.partnerName,
-                  ),
-                ),
-              );
-            },
-            child: Text(
-              'Continue',
-              style: TextStyle(
-                color: AppTheme.primary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
@@ -518,14 +546,6 @@ class _UserScoringScreenState extends State<UserScoringScreen>
                             children: [
                               // Header
                               _buildHeader(displayPartnerName),
-
-                              if (appState.sessionAiTranscriptSummary !=
-                                  null) ...[
-                                SizedBox(height: 16.h),
-                                _buildAiInsightCard(
-                                  appState.sessionAiTranscriptSummary!,
-                                ),
-                              ],
 
                               SizedBox(height: 24.h),
 
@@ -575,49 +595,6 @@ class _UserScoringScreenState extends State<UserScoringScreen>
           ),
         );
       },
-    );
-  }
-
-  Widget _buildAiInsightCard(String summary) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(14.w),
-      decoration: AppTheme.glassmorphicDecoration(
-        borderRadius: 12,
-        hasGlow: true,
-        glowColor: AppTheme.aiActive,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.auto_awesome_rounded, color: AppTheme.aiActive, size: 20.sp),
-          SizedBox(width: 10.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'AI conversation insight',
-                  style: TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13.sp,
-                  ),
-                ),
-                SizedBox(height: 6.h),
-                Text(
-                  summary,
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 12.sp,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 

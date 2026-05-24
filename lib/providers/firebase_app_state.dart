@@ -1,6 +1,8 @@
-import 'package:flutter/foundation.dart';
-import 'dart:developer' as developer;
 import 'dart:async';
+import 'dart:developer' as developer;
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/partner.dart';
 import '../models/communication_session.dart';
@@ -48,7 +50,13 @@ class FirebaseAppState extends ChangeNotifier {
   /// AI-generated scores from post-call analysis (before mutual partner ratings).
   CommunicationScores? _sessionAiScores;
   Map<String, dynamic>? _sessionAiAnalysis;
+  Map<String, dynamic>? _sessionAiTranscript;
   String? _sessionAiTranscriptSummary;
+
+  /// Deferred until after partner rating — path to local call recording.
+  String? _pendingCallAudioPath;
+  int? _pendingCallDurationSeconds;
+  String? _pendingConflictTopic;
 
   // Getters
   User? get user => _user;
@@ -77,15 +85,45 @@ class FirebaseAppState extends ChangeNotifier {
   bool get isLoading => _isLoading;
   CommunicationScores? get sessionAiScores => _sessionAiScores;
   Map<String, dynamic>? get sessionAiAnalysis => _sessionAiAnalysis;
+  Map<String, dynamic>? get sessionAiTranscript => _sessionAiTranscript;
   String? get sessionAiTranscriptSummary => _sessionAiTranscriptSummary;
+  String? get pendingCallAudioPath => _pendingCallAudioPath;
+  int? get pendingCallDurationSeconds => _pendingCallDurationSeconds;
+  String? get pendingConflictTopic => _pendingConflictTopic;
+
+  void setPendingCallAudio({
+    required String path,
+    int? durationSeconds,
+    String? conflictTopic,
+  }) {
+    _pendingCallAudioPath = path;
+    _pendingCallDurationSeconds = durationSeconds;
+    _pendingConflictTopic = conflictTopic;
+    notifyListeners();
+  }
+
+  Future<void> clearPendingCallAudio({bool deleteFile = false}) async {
+    if (deleteFile && _pendingCallAudioPath != null) {
+      try {
+        final file = File(_pendingCallAudioPath!);
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+    }
+    _pendingCallAudioPath = null;
+    _pendingCallDurationSeconds = null;
+    _pendingConflictTopic = null;
+    notifyListeners();
+  }
 
   void setSessionAiAnalysis({
     required CommunicationScores scores,
     required Map<String, dynamic> analysis,
+    Map<String, dynamic>? transcript,
     String? transcriptSummary,
   }) {
     _sessionAiScores = scores;
     _sessionAiAnalysis = analysis;
+    _sessionAiTranscript = transcript;
     _sessionAiTranscriptSummary = transcriptSummary;
     notifyListeners();
   }
@@ -93,6 +131,7 @@ class FirebaseAppState extends ChangeNotifier {
   void clearSessionAiAnalysis() {
     _sessionAiScores = null;
     _sessionAiAnalysis = null;
+    _sessionAiTranscript = null;
     _sessionAiTranscriptSummary = null;
   }
 
@@ -102,12 +141,20 @@ class FirebaseAppState extends ChangeNotifier {
     required String? currentUserId,
     required String? partnerId,
     required String? partnerName,
+    String? partnerGender,
+    String? selfDisplayName,
+    String? selfGender,
   }) {
     _temporarySessionData = {
       'sessionId': sessionId,
       'currentUserId': currentUserId,
       'partnerId': partnerId,
       'partnerName': partnerName,
+      if (partnerGender != null && partnerGender.isNotEmpty)
+        'partnerGender': partnerGender,
+      if (selfDisplayName != null && selfDisplayName.isNotEmpty)
+        'selfDisplayName': selfDisplayName,
+      if (selfGender != null && selfGender.isNotEmpty) 'selfGender': selfGender,
     };
     notifyListeners();
   }
@@ -639,58 +686,103 @@ class FirebaseAppState extends ChangeNotifier {
     }
   }
 
-  // Get current partner (prefer auth + createdBy; also supports legacy A/B ids)
+  // Relationship helpers + partner getters (handles missing partnerB JSON).
+  Partner? _partnerFromRelationshipJson(dynamic raw) {
+    if (raw == null || raw is! Map) return null;
+    try {
+      return Partner.fromJson(Map<String, dynamic>.from(raw));
+    } catch (e) {
+      debugPrint('_partnerFromRelationshipJson: $e');
+      return null;
+    }
+  }
+
+  Partner _syntheticPartnerSlot({
+    required String id,
+    String name = 'Partner',
+    String gender = '',
+  }) {
+    return Partner(
+      id: id,
+      name: name,
+      gender: gender,
+      relationshipGoals: const [],
+      currentChallenges: const [],
+    );
+  }
+
+  /// Refresh relationship row from Supabase (e.g. before AI analysis).
+  Future<void> refreshRelationshipFromServer() async {
+    if (_user == null) return;
+    try {
+      _relationshipData = await _relationshipService.getUserRelationship();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('refreshRelationshipFromServer: $e');
+    }
+  }
+
   Partner? getCurrentPartner() {
     if (_relationshipData == null || _user == null) return null;
 
+    final pa = _partnerFromRelationshipJson(_relationshipData!['partnerA']);
+    final pb = _partnerFromRelationshipJson(_relationshipData!['partnerB']);
+    final createdBy = _relationshipData!['createdBy']?.toString();
+    final uid = _user!.id;
+
     try {
-      if (_relationshipData!['createdBy'] == _user!.id) {
-        final data = _relationshipData!['partnerA'];
-        if (data is Map<String, dynamic>) return Partner.fromJson(data);
-        return null;
+      if (createdBy == uid) {
+        if (pa != null) return pa;
+        return _syntheticPartnerSlot(id: 'A', name: 'You');
       }
-      final data = _relationshipData!['partnerB'];
-      if (data is Map<String, dynamic>) return Partner.fromJson(data);
-      return null;
+      if (pb != null) return pb;
+      return _syntheticPartnerSlot(id: 'B', name: 'You');
     } catch (e) {
       debugPrint('getCurrentPartner: $e');
     }
 
     if (_currentUserId == 'A') {
-      final data = _relationshipData!['partnerA'];
-      if (data is Map<String, dynamic>) return Partner.fromJson(data);
-    } else if (_currentUserId == 'B') {
-      final data = _relationshipData!['partnerB'];
-      if (data is Map<String, dynamic>) return Partner.fromJson(data);
+      return pa ?? _syntheticPartnerSlot(id: 'A');
     }
-    return null;
+    if (_currentUserId == 'B') {
+      return pb ?? _syntheticPartnerSlot(id: 'B');
+    }
+    return pa ?? pb;
   }
 
-  // Get other partner
+  /// Stable in-app partner slot id for ratings: `A` or `B`.
+  String? getRaterId() => _currentUserId;
+
+  /// Partner id the current user should rate (`A` or `B` from relationship json).
+  String? getRatedPartnerId() => getOtherPartner()?.id;
+
+  // Get other partner (falls back when partnerB JSON not written yet).
   Partner? getOtherPartner() {
     if (_relationshipData == null || _user == null) return null;
 
+    final pa = _partnerFromRelationshipJson(_relationshipData!['partnerA']);
+    final pb = _partnerFromRelationshipJson(_relationshipData!['partnerB']);
+    final createdBy = _relationshipData!['createdBy']?.toString();
+    final uid = _user!.id;
+
     try {
-      if (_relationshipData!['createdBy'] == _user!.id) {
-        final data = _relationshipData!['partnerB'];
-        if (data is Map<String, dynamic>) return Partner.fromJson(data);
-        return null;
+      if (createdBy == uid) {
+        if (pb != null) return pb;
+        return _syntheticPartnerSlot(id: 'B');
       }
-      final data = _relationshipData!['partnerA'];
-      if (data is Map<String, dynamic>) return Partner.fromJson(data);
-      return null;
+      if (pa != null) return pa;
+      return _syntheticPartnerSlot(id: 'A');
     } catch (e) {
       debugPrint('getOtherPartner: $e');
     }
 
     if (_currentUserId == 'A') {
-      final data = _relationshipData!['partnerB'];
-      if (data is Map<String, dynamic>) return Partner.fromJson(data);
-    } else if (_currentUserId == 'B') {
-      final data = _relationshipData!['partnerA'];
-      if (data is Map<String, dynamic>) return Partner.fromJson(data);
+      return pb ?? _syntheticPartnerSlot(id: 'B');
     }
-    return null;
+    if (_currentUserId == 'B') {
+      return pa ?? _syntheticPartnerSlot(id: 'A');
+    }
+    return pb ?? pa;
   }
 
   // Get recent sessions

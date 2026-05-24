@@ -5,13 +5,9 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import '../../providers/firebase_app_state.dart';
-import '../../services/call_analysis_service.dart';
-import '../../services/firestore_sessions_service.dart';
 import '../../services/session_call_recorder.dart';
 import '../../services/zego_voice_service.dart';
 import '../../services/zego_token_service.dart';
-import '../../models/call_analysis_result.dart';
-import '../../models/partner.dart';
 import '../../theme/app_theme.dart';
 import '../resolution/user_scoring_screen.dart';
 import '../../widgets/mood_checkin_dialog.dart';
@@ -36,8 +32,6 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
   // ZEGO Voice service
   late ZegoVoiceService _zegoService;
   final SessionCallRecorder _callRecorder = SessionCallRecorder();
-  final CallAnalysisService _callAnalysisService = CallAnalysisService();
-  final FirestoreSessionsService _sessionsService = FirestoreSessionsService();
 
   // Session state
   bool _isConnected = false;
@@ -541,85 +535,46 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
     );
 
     if (result == true && mounted) {
-      // Show loading overlay while processing
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(
-          child: Card(
-            child: Padding(
-              padding: EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Analyzing your conversation...'),
-                  SizedBox(height: 8),
-                  Text(
-                    'This may take up to a minute',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-
       // Capture session info BEFORE ending ZEGO session
       final appState = context.read<FirebaseAppState>();
       final sessionId = appState.currentSession?.id;
       final currentUserId = appState.currentUserId;
       final otherPartner = appState.getOtherPartner();
-      final myPartner = appState.getCurrentPartner();
-      final myUserId = appState.user?.id;
-
       developer.log(
         'Voice chat end: sessionId=$sessionId currentUserId=$currentUserId '
         'otherPartner=${otherPartner?.name} (${otherPartner?.id})',
       );
 
       // Store session data in app state for navigation
+      final raterId = appState.getRaterId() ?? currentUserId;
+      final ratedPartnerId =
+          appState.getRatedPartnerId() ?? otherPartner?.id;
+
+      final myPartner = appState.getCurrentPartner();
+
       appState.setTemporarySessionData(
         sessionId: sessionId,
-        currentUserId: currentUserId,
-        partnerId: otherPartner?.id,
-        partnerName: otherPartner?.name,
+        currentUserId: raterId,
+        partnerId: ratedPartnerId ?? (raterId == 'A' ? 'B' : 'A'),
+        partnerName:
+            otherPartner?.name ?? _zegoService.partnerName ?? 'Partner',
+        partnerGender: otherPartner?.gender ?? '',
+        selfDisplayName: myPartner?.name,
+        selfGender: myPartner?.gender,
       );
 
-      String? analysisError;
-      try {
-        await _runPostCallAnalysis(
-          appState: appState,
-          sessionId: sessionId,
-          myUserId: myUserId,
-          myName: myPartner?.name ?? 'You',
-          myGender: myPartner?.gender ?? '',
-          otherPartner: otherPartner,
+      final audioFile = await _callRecorder.stop();
+      if (audioFile != null) {
+        appState.setPendingCallAudio(
+          path: audioFile.path,
+          durationSeconds: _sessionMinutes * 60 + _sessionSeconds,
+          conflictTopic: _currentTherapyCategory,
         );
-      } catch (e) {
-        analysisError = e.toString();
-        developer.log('Post-call analysis failed: $e');
       }
 
       await _zegoService.endSession();
 
-      // Close loading dialog
-      if (mounted) Navigator.pop(context);
-
-      if (analysisError != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Could not analyze call: $analysisError. You can still rate your partner.',
-            ),
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-
-      // Navigate directly to user scoring screen
+      // Navigate to partner rating (AI analysis runs after rating)
       if (mounted) {
         developer.log(
           'Navigate to UserScoringScreen sessionId=$sessionId '
@@ -638,69 +593,6 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
           ),
         );
       }
-    }
-  }
-
-  Future<void> _runPostCallAnalysis({
-    required FirebaseAppState appState,
-    required String? sessionId,
-    required String? myUserId,
-    required String myName,
-    required String myGender,
-    required Partner? otherPartner,
-  }) async {
-    if (sessionId == null || myUserId == null || otherPartner == null) {
-      return;
-    }
-
-    final audioFile = await _callRecorder.stop();
-    if (audioFile == null) {
-      throw Exception('No call audio was captured');
-    }
-
-    try {
-      final result = await _callAnalysisService.analyzeCall(
-        sessionId: sessionId,
-        partners: [
-          CallPartnerInfo(
-            id: myUserId,
-            name: myName,
-            gender: myGender,
-          ),
-          CallPartnerInfo(
-            id: otherPartner.id,
-            name: otherPartner.name,
-            gender: otherPartner.gender,
-          ),
-        ],
-        audioFile: audioFile,
-        durationSeconds: _sessionMinutes * 60 + _sessionSeconds,
-        conflictTopic: _currentTherapyCategory,
-      );
-
-      appState.setSessionAiAnalysis(
-        scores: result.appScores,
-        analysis: result.analysis,
-        transcriptSummary: result.sessionSummary,
-      );
-
-      await _sessionsService.saveCallAnalysis(
-        sessionId,
-        transcript: result.transcript,
-        analysis: result.analysis,
-        appScores: result.appScores.toJson(),
-      );
-
-      developer.log(
-        'Call analysis saved for session $sessionId '
-        '(${result.processingTimeMs}ms)',
-      );
-    } finally {
-      try {
-        if (await audioFile.exists()) {
-          await audioFile.delete();
-        }
-      } catch (_) {}
     }
   }
 
