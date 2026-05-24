@@ -97,6 +97,79 @@ const ANALYSIS_RESPONSE_SCHEMA = {
       type: "array",
       items: { type: "string" },
     },
+    resolutionActions: {
+      type: "object",
+      properties: {
+        conflictEscalators: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              partnerId: { type: "string" },
+              partnerName: { type: "string" },
+              behavior: { type: "string" },
+              impact: { type: "string" },
+              betterAlternative: { type: "string" },
+            },
+            required: [
+              "partnerId",
+              "partnerName",
+              "behavior",
+              "impact",
+              "betterAlternative",
+            ],
+          },
+        },
+        partnerActionPlans: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              partnerId: { type: "string" },
+              partnerName: { type: "string" },
+              actions: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    title: { type: "string" },
+                    description: { type: "string" },
+                    whyItHelps: { type: "string" },
+                  },
+                  required: ["title", "description", "whyItHelps"],
+                },
+              },
+            },
+            required: ["partnerId", "partnerName", "actions"],
+          },
+        },
+        sharedSolutions: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              description: { type: "string" },
+            },
+            required: ["title", "description"],
+          },
+        },
+        immediateRepairScript: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            script: { type: "string" },
+          },
+          required: ["title", "script"],
+        },
+      },
+      required: [
+        "conflictEscalators",
+        "partnerActionPlans",
+        "sharedSolutions",
+        "immediateRepairScript",
+      ],
+    },
     overallFeedback: { type: "string" },
     improvementSuggestions: {
       type: "array",
@@ -119,6 +192,7 @@ const ANALYSIS_RESPONSE_SCHEMA = {
     "partnerStrengths",
     "partnerImprovements",
     "resolutionSteps",
+    "resolutionActions",
     "overallFeedback",
     "improvementSuggestions",
     "suggestedBondingActivities",

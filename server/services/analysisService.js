@@ -8,20 +8,67 @@ Analyze the complete conversation transcript between two partners who discussed 
 The transcript uses chronological back-and-forth lines such as:
 Male :: ...
 Female :: ...
-Each line is one speaker turn. Use this flow to understand who initiated topics, who interrupted, and how each partner responded.
+Each line is one speaker turn. Use this flow to understand who initiated topics, who interrupted, repeated demands, avoided accountability, escalated tension, validated feelings, or responded defensively.
 
 Important rules:
 - Do not give legal, medical, or clinical therapy advice.
 - Do not declare one partner absolutely "guilty" or "at fault."
-- Identify communication patterns, responsibility indicators (shared and individual), harmful behaviors, emotional tone, and practical resolution steps both can try.
+- Identify communication patterns, responsibility indicators, harmful behaviors, emotional tone, and practical resolution steps both can try.
 - Be fair, balanced, and constructive toward both partners.
 - Use neutral, non-judgmental language.
 - All numeric scores must be integers from 0 to 100 (higher = healthier communication in that dimension).
-- partnerScores, partnerStrengths, partnerImprovements, partnerEmotionalTones, and responsibilityIndicators entries must use the exact partner ids provided in the request (not "A"/"B" unless those are the ids).
+- partnerScores, partnerStrengths, partnerImprovements, partnerEmotionalTones, responsibilityIndicators, and resolutionActions entries must use the exact partner ids provided in the request (not "A"/"B" unless those are the ids).
 - harmfulBehaviors.observedIn must be a partner id, "both", or "unclear".
 - suggestedBondingActivities should be warm, low-pressure reconnecting ideas (3–5 items).
 - disclaimer must state this is AI-generated communication feedback, not professional therapy.
-- Return only JSON matching the schema.`;
+
+Resolution guidance rules:
+  - The output must include a resolutionActions object.
+  - resolutionActions must contain these exact sections:
+    1. conflictEscalators
+    2. partnerActionPlans
+    3. sharedSolutions
+    4. immediateRepairScript
+
+  - resolutionActions.conflictEscalators must identify what each partner did that may have raised, prolonged, or intensified the conflict.
+  - For conflictEscalators, explain:
+    - the partnerId
+    - the partnerName
+    - the specific behavior
+    - how it may have affected the other partner or the conversation
+    - a better alternative response
+
+  - resolutionActions.partnerActionPlans must include 2–3 practical actions for each partner.
+  - Each partner action must include:
+    - title
+    - description
+    - whyItHelps
+
+  - resolutionActions.sharedSolutions must include 2–3 shared steps both partners can try together.
+  - resolutionActions.immediateRepairScript must provide one short, calm script they can use immediately to restart the conversation.
+
+  - Do not use insulting, blaming, or shaming language.
+  - Do not say one partner is completely wrong or fully responsible.
+  - Avoid the word "mistake" in user-facing content.
+  - Use softer wording such as "what escalated the conflict", "what can improve", "may have escalated", "could improve", or "might have made the other partner feel".
+  - Base all suggestions only on the transcript and provided metadata.
+  - Do not invent facts that are not present in the transcript.
+  - Keep the advice practical, direct, supportive, and simple enough to show inside a mobile app.
+
+Return only JSON matching the schema.`;
+
+/* 
+  - The output must include a resolutionActions object.
+  - resolutionActions must explain what each partner did that may have escalated the conflict.
+  - Do not use insulting or blaming language.
+  - Use phrases like "may have escalated", "could improve", "might have made the other partner feel", instead of harsh judgment.
+  - For each partner, provide 2–3 specific actions they can take next.
+  - Provide 2–3 shared solutions both partners can try together.
+  - Provide one short repair script they can say immediately to restart the conversation calmly.
+  - Base all suggestions only on the transcript and provided metadata.
+  - Do not invent facts that are not present in the transcript.
+  - Keep the advice practical, direct, and simple enough to show inside a mobile app.
+*/
 
 /**
  * @param {string} fullTranscriptText
