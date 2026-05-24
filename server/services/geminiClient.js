@@ -1,6 +1,6 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
 function getApiKey() {
   const key = process.env.GEMINI_API_KEY;
@@ -12,6 +12,7 @@ function getApiKey() {
 
 function getModel(options = {}) {
   const genAI = new GoogleGenerativeAI(getApiKey());
+  
   return genAI.getGenerativeModel({
     model: options.model || DEFAULT_MODEL,
     generationConfig: {
