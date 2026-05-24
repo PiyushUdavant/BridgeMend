@@ -3,7 +3,7 @@ import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
-
+import 'package:http_parser/http_parser.dart';
 import '../config/api_config.dart';
 import '../models/call_analysis_result.dart';
 
@@ -40,16 +40,44 @@ class CallAnalysisService {
 
     final ext = audioFile.path.split('.').last.toLowerCase();
 
+    MediaType contentType;
+
+    switch(ext){
+      case 'm4a':
+        contentType = MediaType('audio', 'mp4');
+        break;
+
+      case 'aac':
+        contentType = MediaType('audio', 'aac');
+        break;
+
+      case 'mp3': 
+        contentType = MediaType('audio', 'mpeg');
+        break;
+
+      case 'wav':
+        contentType = MediaType('audio', 'wav');
+        break;
+
+      case 'webm':
+        contentType = MediaType('audio', 'webm');
+        break;
+
+      default:
+        contentType = MediaType('application', 'octet-stream');
+    }
+
     request.files.add(
       await http.MultipartFile.fromPath(
         'audio',
         audioFile.path,
         filename: 'call.$ext',
+        contentType: contentType,
       ),
     );
 
     developer.log(
-      'CallAnalysisService: uploading audio (${await audioFile.length()} bytes)',
+      'CallAnalysisService: uploading audio (${await audioFile.length()} bytes), ext=$ext, type=$contentType',
     );
 
     final streamed = await request.send().timeout(_timeout);

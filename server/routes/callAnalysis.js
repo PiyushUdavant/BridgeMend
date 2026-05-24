@@ -1,5 +1,7 @@
 const express = require("express");
 const multer = require("multer");
+const path = require("path");
+
 const {
   transcribeAudio,
   mergeTranscripts,
@@ -15,19 +17,67 @@ const {
 
 const router = express.Router();
 
+// const upload = multer({
+//   storage: multer.memoryStorage(),
+//   limits: {
+//     fileSize: 25 * 1024 * 1024,
+//     files: 3,
+//   },
+//   fileFilter: (_req, file, cb) => {
+//     if (file.mimetype.startsWith("audio/") || file.mimetype === "video/webm") {
+//       cb(null, true);
+//     } else {
+//       cb(new Error(`Unsupported file type: ${file.mimetype}`));
+//     }
+//   },
+// });
+
+// Added multi-file support format 
+const fileFilter = (_req, file, cb) => {
+  const ext = path.extname(file.originalname || "").toLowerCase();
+
+  const allowedMimeTypes = [
+    "audio/mpeg",
+    "audio/mp3",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/webm",
+    "audio/mp4",
+    "audio/m4a",
+    "audio/aac",
+    "video/webm",
+    "application/octet-stream",
+  ];
+
+  const allowedExtensions = [
+    ".mp3",
+    ".wav",
+    ".webm",
+    ".m4a",
+    ".aac",
+    ".mp4",
+  ];
+
+  const isMimeAllowed = allowedMimeTypes.includes(file.mimetype);
+  const isExtAllowed = allowedExtensions.includes(ext);
+
+  if (isMimeAllowed && isExtAllowed) {
+    return cb(null, true);
+  }
+
+  return cb(
+    new Error(`Unsupported file type: ${file.mimetype}, ext: ${ext}`),
+    false
+  );
+};
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 25 * 1024 * 1024,
     files: 3,
   },
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith("audio/") || file.mimetype === "video/webm") {
-      cb(null, true);
-    } else {
-      cb(new Error(`Unsupported file type: ${file.mimetype}`));
-    }
-  },
+  fileFilter,
 });
 
 function parsePartners(body) {
