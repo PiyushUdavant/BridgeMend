@@ -13,8 +13,8 @@ class ZegoVoiceService extends ChangeNotifier {
   Future<void>? _ongoingRelease;
 
   // ZEGOCLOUD configuration - REPLACE WITH YOUR ACTUAL VALUES
-  static const int appID = 272074439; // Replace with your ZEGOCLOUD App ID
-  static const String appSign = "efa4359463bf7dcac2baccebb6ab76091bd4e8461728d3fed6d640f0a5bdef5a"; // Replace with your App Sign
+  static const int appID = 533303848; // Replace with your ZEGOCLOUD App ID
+  static const String appSign = "5ede2878c9070a642fc502859a687df36b42ad7646385b52cfc0bc1d55913169"; // Replace with your App Sign
 
   /// ZEGO volume APIs use 0–200; default publish/play is 100.
   static const int _playStreamVolumePercent = 200;

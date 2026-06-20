@@ -10,8 +10,10 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 const callAnalysisRouter = require("./routes/callAnalysis");
 
 // ZEGOCLOUD App credentials
-const APP_ID = 272074439;
-const SERVER_SECRET = "1c9a2bf2cca21d71886062c82cf2dee4";
+// const APP_ID = 272074439;
+// const SERVER_SECRET = "1c9a2bf2cca21d71886062c82cf2dee4";
+const APP_ID = 533303848;
+const SERVER_SECRET = "7fda6c96576840c842e5bb4b2e18832a";
 
 // ZEGOCLOUD Token Generator Functions
 function generateToken(userID, effectiveTimeInSeconds = 86400) {

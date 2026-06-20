@@ -10,6 +10,8 @@ import '../../theme/app_theme.dart';
 import '../../widgets/aurora_background.dart';
 import '../../widgets/gradient_button.dart';
 import 'post_resolution_screen.dart';
+import 'call_resolution_screen.dart';
+
 
 /// Full Gemini call analysis shown after partner rating, before reflection.
 class CallAiAnalysisScreen extends StatefulWidget {
@@ -114,6 +116,20 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
       ),
     );
   }
+
+  void _goToResolutionScreen() {
+  if (_result == null) return;
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => CallResolutionScreen(
+        analysis: _result!.analysis,
+        partnerName: widget.partnerName,
+      ),
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -328,13 +344,38 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
             ],
           ),
         ),
+        // Padding(
+        //   padding: EdgeInsets.all(20.w),
+        //   child: GradientButton(
+        //     text: 'Continue to reflection',
+        //     icon: Icons.arrow_forward_rounded,
+        //     onPressed: _goToReflection,
+        //     width: double.infinity,
+        //   ),
+        // ),
         Padding(
           padding: EdgeInsets.all(20.w),
-          child: GradientButton(
-            text: 'Continue to reflection',
-            icon: Icons.arrow_forward_rounded,
-            onPressed: _goToReflection,
-            width: double.infinity,
+          child: Column(
+            children: [
+              GradientButton(
+                text: 'Open resolution plan',
+                icon: Icons.auto_fix_high_rounded,
+                onPressed: _goToResolutionScreen,
+                width: double.infinity,
+              ),
+              SizedBox(height: 12.h),
+              TextButton(
+                onPressed: _goToReflection,
+                child: Text(
+                  'Continue to reflection',
+                  style: TextStyle(
+                    color: AppTheme.textTertiary,
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],
