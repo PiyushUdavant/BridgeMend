@@ -17,7 +17,7 @@ function getModel(options = {}) {
     model: options.model || DEFAULT_MODEL,
     generationConfig: {
       temperature: options.temperature ?? 0.35,
-      maxOutputTokens: options.maxOutputTokens ?? 8192,
+      maxOutputTokens: options.maxOutputTokens ?? 65536,
       responseMimeType: "application/json",
       ...(options.responseSchema
         ? { responseSchema: options.responseSchema }
