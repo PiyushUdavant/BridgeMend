@@ -136,77 +136,111 @@ class _PostResolutionScreenState extends State<PostResolutionScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Animated heart icon container
-                    AnimatedBuilder(
-                      animation: _heartAnimation,
-                      builder: (context, child) {
-                        return Transform.scale(
-                          scale: _heartAnimation.value,
-                          child: Container(
-                            width: 100.w,
-                            height: 100.w,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: const LinearGradient(
-                                colors: [
-                                  AppTheme.gradientStart,
-                                  AppTheme.gradientEnd,
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppTheme.primary.withValues(
-                                    alpha: 0.4,
-                                  ),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 8),
-                                ),
-                                BoxShadow(
-                                  color: AppTheme.secondary.withValues(
-                                    alpha: 0.2,
-                                  ),
-                                  blurRadius: 40,
-                                  offset: const Offset(0, 0),
-                                ),
-                              ],
-                            ),
-                            child: Icon(
-                              Icons.favorite_rounded,
-                              size: 48.sp,
-                              color: Colors.white,
-                            ),
-                          ),
-                        );
-                      },
+                    // AnimatedBuilder(
+                    //   animation: _heartAnimation,
+                    //   builder: (context, child) {
+                    //     return Transform.scale(
+                    //       scale: _heartAnimation.value,
+                    //       child: Container(
+                    //         width: 100.w,
+                    //         height: 100.w,
+                    //         decoration: BoxDecoration(
+                    //           shape: BoxShape.circle,
+                    //           gradient: const LinearGradient(
+                    //             colors: [
+                    //               AppTheme.gradientStart,
+                    //               AppTheme.gradientEnd,
+                    //             ],
+                    //             begin: Alignment.topLeft,
+                    //             end: Alignment.bottomRight,
+                    //           ),
+                    //           boxShadow: [
+                    //             BoxShadow(
+                    //               color: AppTheme.primary.withValues(
+                    //                 alpha: 0.4,
+                    //               ),
+                    //               blurRadius: 20,
+                    //               offset: const Offset(0, 8),
+                    //             ),
+                    //             BoxShadow(
+                    //               color: AppTheme.secondary.withValues(
+                    //                 alpha: 0.2,
+                    //               ),
+                    //               blurRadius: 40,
+                    //               offset: const Offset(0, 0),
+                    //             ),
+                    //           ],
+                    //         ),
+                    //         child: Icon(
+                    //           Icons.favorite_rounded,
+                    //           size: 48.sp,
+                    //           color: Colors.white,
+                    //         ),
+                    //       ),
+                    //     );
+                    //   },
+                    // ),
+
+                    // SizedBox(height: AppTheme.spacingL.h),
+
+                    // Text(
+                    //   'Wonderful Progress! 💜',
+                    //   style: Theme.of(context).textTheme.headlineMedium
+                    //       ?.copyWith(
+                    //         color: AppTheme.textPrimary,
+                    //         fontWeight: FontWeight.w800,
+                    //         fontSize: 28.sp,
+                    //         letterSpacing: -0.8,
+                    //       ),
+                    //   textAlign: TextAlign.center,
+                    // ),
+
+                    // SizedBox(height: AppTheme.spacingM.h),
+
+                    // Container(
+                    //   padding: EdgeInsets.symmetric(horizontal: 16.w),
+                    //   child: Text(
+                    //     'You\'ve taken an important step toward understanding each other better.',
+                    //     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    //       color: AppTheme.textSecondary,
+                    //       height: 1.4,
+                    //     ),
+                    //     textAlign: TextAlign.center,
+                    //   ),
+                    // ),
+                    Container(
+                      padding: const EdgeInsets.all(AppTheme.spacingL),
+                      decoration: BoxDecoration(
+                        color: AppTheme.successGreen.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppTheme.successGreen.withValues(alpha: 0.3),
+                          width: 2,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.check_circle_rounded,
+                        color: AppTheme.successGreen,
+                        size: 48,
+                      ),
                     ),
-
-                    SizedBox(height: AppTheme.spacingL.h),
-
+                    const SizedBox(height: AppTheme.spacingL),
                     Text(
-                      'Wonderful Progress! 💜',
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(
-                            color: AppTheme.textPrimary,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 28.sp,
-                            letterSpacing: -0.8,
-                          ),
+                      'Session Complete!',
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
                       textAlign: TextAlign.center,
                     ),
-
-                    SizedBox(height: AppTheme.spacingM.h),
-
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 16.w),
-                      child: Text(
-                        'You\'ve taken an important step toward understanding each other better.',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                          height: 1.4,
-                        ),
-                        textAlign: TextAlign.center,
+                    const SizedBox(height: AppTheme.spacingM),
+                    Text(
+                      'You\'ve successfully completed a guided conversation session.',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: AppTheme.textSecondary,
+                        height: 1.4,
                       ),
+                      textAlign: TextAlign.center,
                     ),
 
                     SizedBox(height: AppTheme.spacingXL.h),

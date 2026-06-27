@@ -1,66 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
-
 import '../../models/call_analysis_result.dart';
 import '../../providers/firebase_app_state.dart';
-import '../../services/session_analysis_loader.dart';
+import '../../services/firestore_sessions_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/aurora_background.dart';
-import '../../widgets/gradient_button.dart';
-import 'post_resolution_screen.dart';
-import 'call_resolution_screen.dart';
 
-
-/// Full Gemini call analysis shown after partner rating, before reflection.
-class CallAiAnalysisScreen extends StatefulWidget {
+class SessionInsightsHistoryScreen extends StatefulWidget {
   final String sessionId;
-  final String? currentUserId;
   final String? partnerName;
-  /// Rated partner slot id (`A` / `B`) — passed through when relationship JSON is incomplete.
-  final String? ratedPartnerId;
-  final String? selfDisplayName;
-  final String? selfGender;
-  final String? partnerGender;
 
-  const CallAiAnalysisScreen({
+  const SessionInsightsHistoryScreen({
     super.key,
     required this.sessionId,
-    this.currentUserId,
     this.partnerName,
-    this.ratedPartnerId,
-    this.selfDisplayName,
-    this.selfGender,
-    this.partnerGender,
   });
 
   @override
-  State<CallAiAnalysisScreen> createState() => _CallAiAnalysisScreenState();
+  State<SessionInsightsHistoryScreen> createState() =>
+      _SessionInsightsHistoryScreenState();
 }
 
-class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
-  final SessionAnalysisLoader _loader = SessionAnalysisLoader();
+class _SessionInsightsHistoryScreenState
+    extends State<SessionInsightsHistoryScreen> {
+  final FirestoreSessionsService _service = FirestoreSessionsService();
   final PageController _pageController = PageController();
 
   CallAnalysisResult? _result;
-  String? _error;
-  String _statusLabel = 'Preparing AI analysis…';
-  int _pageIndex = 0;
   bool _loading = true;
+  int _pageIndex = 0;
 
-  static const _pageTitles = [
-    'Overview',
-    'Conversation',
-    'Patterns',
-    'Scores',
-    // 'Next steps',
-  ];
+  static const _pageTitles = ['Overview', 'Conversation', 'Patterns', 'Scores'];
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _runAnalysis());
+    _load();
   }
 
   @override
@@ -69,251 +45,103 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
     super.dispose();
   }
 
-  Future<void> _runAnalysis() async {
-    final appState = context.read<FirebaseAppState>();
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-
-    try {
-      final result = await _loader.loadOrAnalyze(
-        appState: appState,
-        sessionId: widget.sessionId,
-        routeRatedPartnerId: widget.ratedPartnerId,
-        routeRatedPartnerName: widget.partnerName,
-        routeRatedPartnerGender: widget.partnerGender,
-        routeSelfDisplayName: widget.selfDisplayName,
-        routeSelfGender: widget.selfGender,
-        onStatus: (label) {
-          if (mounted) setState(() => _statusLabel = label);
-        },
-      );
-      if (!mounted) return;
+  Future<void> _load() async {
+    final result = await _service.getSessionAiAnalysis(widget.sessionId);
+    if (mounted) {
       setState(() {
         _result = result;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString();
         _loading = false;
       });
     }
   }
 
-  void _goToReflection() {
-    context.read<FirebaseAppState>().clearTemporarySessionData();
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PostResolutionScreen(
-          sessionId: widget.sessionId,
-          currentUserId: widget.currentUserId,
-          partnerName: widget.partnerName,
-        ),
-      ),
-    );
-  }
-
-  // void _goToResolutionScreen() {
-  //   if (_result == null) return;
-
-  //   Navigator.push(
-  //     context,
-  //     MaterialPageRoute(
-  //       builder: (context) => CallResolutionScreen(
-  //         analysis: _result!.analysis,
-  //         partnerName: widget.partnerName,
-  //         sessionId: widget.sessionId,
-  //         currentUserId: widget.currentUserId,
-  //       ),
-  //     ),
-  //   );
-  // }
-
-  void _goToResolutionScreen() {
-    if (_result == null) return;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CallResolutionScreen(
-          analysis: _result!.analysis,
-          partnerName: widget.partnerName,
-          sessionId: widget.sessionId,
-          currentUserId: widget.currentUserId,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      child: Scaffold(
-        body: AuroraBackground(
-          intensity: 0.65,
-          child: SafeArea(
-            child: _loading
-                ? _buildLoading()
-                : _error != null
-                    ? _buildError()
-                    : _buildResults(),
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ),
+        title: Text(
+          'Session Insights',
+          style: TextStyle(
+            color: AppTheme.textPrimary,
+            fontSize: 18.sp,
+            fontWeight: FontWeight.w700,
           ),
+        ),
+        actions: [
+          Padding(
+            padding: EdgeInsets.only(right: 16.w),
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              color: AppTheme.aiActive,
+              size: 22.sp,
+            ),
+          ),
+        ],
+      ),
+      body: AuroraBackground(
+        intensity: 0.65,
+        child: SafeArea(
+          child: _loading
+              ? Center(
+                  child: CircularProgressIndicator(color: AppTheme.aiActive),
+                )
+              : _result == null
+                  ? _buildNotAvailable()
+                  : _buildContent(),
         ),
       ),
     );
   }
 
-  Widget _buildLoading() {
-    return Padding(
-      padding: EdgeInsets.all(AppTheme.spacingL.w),
-      child: Column(
-        children: [
-          SizedBox(height: 32.h),
-          SizedBox(
-            width: 120.w,
-            height: 120.w,
-            child: Lottie.asset(
-              'assets/lottie/ai_orb.json',
-              fit: BoxFit.contain,
+  Widget _buildNotAvailable() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(24.w),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.cloud_off_rounded,
+              color: AppTheme.textSecondary,
+              size: 56.sp,
             ),
-          ),
-          SizedBox(height: 24.h),
-          Text(
-            'Bridgemend AI',
-            style: TextStyle(
-              color: AppTheme.aiActive,
-              fontSize: 14.sp,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
-            ),
-          ),
-          SizedBox(height: 8.h),
-          Text(
-            'Analyzing your conversation',
-            style: TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 22.sp,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: 12.h),
-          Text(
-            _statusLabel,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppTheme.textSecondary, fontSize: 14.sp),
-          ),
-          SizedBox(height: 32.h),
-          _buildProgressStep('Recording processed', true),
-          _buildProgressStep('Speech transcribed', _statusLabel.contains('Analyzing') || _statusLabel.contains('Saving') || _statusLabel.contains('saved')),
-          _buildProgressStep('Communication insights', _statusLabel.contains('Saving') || _statusLabel.contains('saved')),
-          const Spacer(),
-          Text(
-            'This usually takes under a minute',
-            style: TextStyle(color: AppTheme.textTertiary, fontSize: 12.sp),
-          ),
-          SizedBox(height: 16.h),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProgressStep(String label, bool done) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 6.h),
-      child: Row(
-        children: [
-          Icon(
-            done ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
-            color: done ? AppTheme.aiActive : AppTheme.textQuaternary,
-            size: 20.sp,
-          ),
-          SizedBox(width: 12.w),
-          Expanded(
-            child: Text(
-              label,
+            SizedBox(height: 16.h),
+            Text(
+              'Insights not available',
               style: TextStyle(
-                color: done ? AppTheme.textPrimary : AppTheme.textTertiary,
-                fontSize: 14.sp,
+                color: AppTheme.textPrimary,
+                fontSize: 18.sp,
+                fontWeight: FontWeight.w600,
               ),
             ),
-          ),
-        ],
+            SizedBox(height: 8.h),
+            Text(
+              'No AI analysis was found for this session. This may be an older session completed before AI insights were introduced.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 14.sp,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildError() {
-    return Padding(
-      padding: EdgeInsets.all(AppTheme.spacingL.w),
-      child: Column(
-        children: [
-          const Spacer(),
-          Icon(Icons.cloud_off_rounded, color: AppTheme.interruptionColor, size: 56.sp),
-          SizedBox(height: 16.h),
-          Text(
-            'Analysis unavailable',
-            style: TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 20.sp,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: 12.h),
-          Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppTheme.textSecondary, fontSize: 14.sp),
-          ),
-          const Spacer(),
-          GradientButton(
-            text: 'Retry analysis',
-            icon: Icons.refresh_rounded,
-            onPressed: _runAnalysis,
-            width: double.infinity,
-          ),
-          SizedBox(height: 12.h),
-          TextButton(
-            onPressed: _goToReflection,
-            child: Text(
-              'Skip to reflection',
-              style: TextStyle(color: AppTheme.textTertiary, fontSize: 14.sp),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildResults() {
+  Widget _buildContent() {
     final analysis = _result!.analysis;
     final transcript = _result!.transcript;
 
     return Column(
       children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 8.h),
-          child: Row(
-            children: [
-              Icon(Icons.auto_awesome_rounded, color: AppTheme.aiActive, size: 22.sp),
-              SizedBox(width: 8.w),
-              Expanded(
-                child: Text(
-                  'AI session insights',
-                  style: TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
         SizedBox(
           height: 36.h,
           child: ListView.builder(
@@ -349,6 +177,7 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
             },
           ),
         ),
+        SizedBox(height: 8.h),
         Expanded(
           child: PageView(
             controller: _pageController,
@@ -358,26 +187,7 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
               _buildTranscriptPage(transcript),
               _buildPatternsPage(analysis),
               _buildScoresPage(analysis),
-              // _buildNextStepsPage(analysis),
             ],
-          ),
-        ),
-        // Padding(
-        //   padding: EdgeInsets.all(20.w),
-        //   child: GradientButton(
-        //     text: 'Continue to reflection',
-        //     icon: Icons.arrow_forward_rounded,
-        //     onPressed: _goToReflection,
-        //     width: double.infinity,
-        //   ),
-        // ),
-        Padding(
-          padding: EdgeInsets.all(20.w),
-          child: GradientButton(
-            text: 'Open Resolution Plan',
-            icon: Icons.auto_fix_high_rounded,
-            onPressed: _goToResolutionScreen,
-            width: double.infinity,
           ),
         ),
       ],
@@ -424,10 +234,7 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
             children: [
               _sectionTitle('Overall feedback', Icons.feedback_rounded),
               SizedBox(height: 10.h),
-              Text(
-                feedback.isNotEmpty ? feedback : '—',
-                style: _bodyStyle,
-              ),
+              Text(feedback.isNotEmpty ? feedback : '—', style: _bodyStyle),
             ],
           ),
         ),
@@ -453,7 +260,10 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
               SizedBox(height: 8.h),
               Text(
                 'Back-and-forth dialogue from your call',
-                style: TextStyle(color: AppTheme.textTertiary, fontSize: 12.sp),
+                style: TextStyle(
+                  color: AppTheme.textTertiary,
+                  fontSize: 12.sp,
+                ),
               ),
               SizedBox(height: 16.h),
               if (segments.isNotEmpty)
@@ -477,7 +287,9 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
                           decoration: BoxDecoration(
                             color: color.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8.r),
-                            border: Border.all(color: color.withValues(alpha: 0.5)),
+                            border: Border.all(
+                              color: color.withValues(alpha: 0.5),
+                            ),
                           ),
                           child: Text(
                             label,
@@ -489,16 +301,16 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
                           ),
                         ),
                         SizedBox(width: 10.w),
-                        Expanded(
-                          child: Text(text, style: _bodyStyle),
-                        ),
+                        Expanded(child: Text(text, style: _bodyStyle)),
                       ],
                     ),
                   );
                 })
               else
                 Text(
-                  dialogue.isNotEmpty ? dialogue : 'Transcript not available.',
+                  dialogue.isNotEmpty
+                      ? dialogue
+                      : 'Transcript not available.',
                   style: _bodyStyle.copyWith(height: 1.5),
                 ),
             ],
@@ -523,7 +335,8 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
               _sectionTitle('Communication patterns', Icons.hub_rounded),
               SizedBox(height: 12.h),
               ...patterns.map((p) => _bullet(p, AppTheme.aiActive)),
-              if (patterns.isEmpty) Text('None noted.', style: _bodyStyle),
+              if (patterns.isEmpty)
+                Text('None noted.', style: _bodyStyle),
             ],
           ),
         ),
@@ -614,7 +427,8 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
         ...partnerScores.map((raw) {
           final entry = Map<String, dynamic>.from(raw as Map);
           final partnerId = entry['partnerId']?.toString() ?? '';
-          final scores = Map<String, dynamic>.from(entry['scores'] as Map? ?? {});
+          final scores =
+              Map<String, dynamic>.from(entry['scores'] as Map? ?? {});
           final name = _resolvePartnerName(appState, partnerId);
           final color = AppTheme.getPartnerColor(partnerId);
 
@@ -655,63 +469,7 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
     );
   }
 
-  Widget _buildNextStepsPage(Map<String, dynamic> analysis) {
-    final steps = _stringList(analysis['resolutionSteps']);
-    final suggestions = _stringList(analysis['improvementSuggestions']);
-    final bonding = _stringList(analysis['suggestedBondingActivities']);
-    final disclaimer = analysis['disclaimer']?.toString() ?? '';
-
-    return ListView(
-      padding: EdgeInsets.all(20.w),
-      children: [
-        _glassCard(
-          glowColor: AppTheme.successGreen,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _sectionTitle('Resolution steps', Icons.route_rounded),
-              SizedBox(height: 12.h),
-              ...steps.map((s) => _bullet(s, AppTheme.successGreen)),
-            ],
-          ),
-        ),
-        SizedBox(height: 16.h),
-        _glassCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _sectionTitle('Improve together', Icons.trending_up_rounded),
-              SizedBox(height: 12.h),
-              ...suggestions.map((s) => _bullet(s, AppTheme.neonBlue)),
-            ],
-          ),
-        ),
-        SizedBox(height: 16.h),
-        _glassCard(
-          glowColor: AppTheme.partnerBGlow,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _sectionTitle('Reconnecting ideas', Icons.favorite_border_rounded),
-              SizedBox(height: 12.h),
-              ...bonding.map((s) => _bullet(s, AppTheme.partnerBGlow)),
-            ],
-          ),
-        ),
-        SizedBox(height: 16.h),
-        Text(
-          disclaimer,
-          style: TextStyle(
-            color: AppTheme.textQuaternary,
-            fontSize: 11.sp,
-            fontStyle: FontStyle.italic,
-            height: 1.4,
-          ),
-        ),
-        SizedBox(height: 24.h),
-      ],
-    );
-  }
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   Widget _glassCard({required Widget child, Color? glowColor}) {
     return Container(
@@ -772,8 +530,20 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: TextStyle(color: AppTheme.textSecondary, fontSize: 12.sp)),
-              Text('$v', style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+              Text(
+                label,
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 12.sp,
+                ),
+              ),
+              Text(
+                '$v',
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ],
           ),
           SizedBox(height: 4.h),
@@ -804,7 +574,11 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
       ),
       child: Text(
         severity.toUpperCase(),
-        style: TextStyle(color: c, fontSize: 10.sp, fontWeight: FontWeight.bold),
+        style: TextStyle(
+          color: c,
+          fontSize: 10.sp,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }

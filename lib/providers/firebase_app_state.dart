@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
+import '../services/local_session_service.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -226,6 +227,9 @@ class FirebaseAppState extends ChangeNotifier {
         _sessions = await _sessionsService.getRelationshipSessions(
           _relationshipData!['id'],
         );
+
+        await LocalSessionService.saveSessions(_sessions);
+        
         // Load active session
         debugPrint('🔥 Loading active session...');
         _currentSession = await _sessionsService.getActiveSession(
@@ -658,6 +662,8 @@ class FirebaseAppState extends ChangeNotifier {
         participantStatus: _currentSession!.participantStatus,
         status: 'ended',
       );
+
+      await LocalSessionService.saveSession(completedSession);
 
       _sessions.insert(0, completedSession);
       _currentSession = null;

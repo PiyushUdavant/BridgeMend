@@ -689,48 +689,50 @@ class _UserScoringScreenState extends State<UserScoringScreen>
   }
 
   Widget _buildHeader(String partnerName) {
-    return Container(
-      padding: EdgeInsets.all(20.w),
-      decoration: AppTheme.glassmorphicDecoration(
-        borderRadius: 20,
-        hasGlow: true,
-        glowColor: AppTheme.partnerBColor,
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 60.w,
-            height: 60.w,
-            decoration: BoxDecoration(
-              color: AppTheme.partnerBColor,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.partnerBColor.withValues(alpha: 0.4),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+    return Center(
+      child: Container(
+        padding: EdgeInsets.all(20.w),
+        decoration: AppTheme.glassmorphicDecoration(
+          borderRadius: 20,
+          hasGlow: true,
+          glowColor: AppTheme.partnerBColor,
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 60.w,
+              height: 60.w,
+              decoration: BoxDecoration(
+                color: AppTheme.partnerBColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.partnerBColor.withValues(alpha: 0.4),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Icon(Icons.person_rounded, color: Colors.white, size: 30.sp),
             ),
-            child: Icon(Icons.person_rounded, color: Colors.white, size: 30.sp),
-          ),
-          SizedBox(height: 16.h),
-          Text(
-            'How did $partnerName communicate?',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20.sp,
-              fontWeight: FontWeight.w700,
+            SizedBox(height: 16.h),
+            Text(
+              'How did $partnerName communicate?',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16.sp,
+                fontWeight: FontWeight.w700,
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
-          ),
-          SizedBox(height: 8.h),
-          Text(
-            'Rate each communication skill honestly',
-            style: TextStyle(color: AppTheme.textSecondary, fontSize: 14.sp),
-            textAlign: TextAlign.center,
-          ),
-        ],
+            SizedBox(height: 8.h),
+            Text(
+              'Rate each communication skill honestly',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 14.sp),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1287,3 +1287,1809 @@ DATA FLOW
 ================================================================================
 END OF FILE
 ================================================================================
+
+
+================================================================================
+MOVE "CONTINUE TO REFLECTION" BUTTON — STEP-BY-STEP GUIDE
+================================================================================
+Goal:
+  • call_ai_analysis_screen.dart  → remove "Continue to reflection" TextButton,
+                                    keep only "Open resolution plan" button.
+  • call_resolution_screen.dart   → replace "Back to AI insights" GradientButton
+                                    with a "Continue to reflection" button that
+                                    navigates to PostResolutionScreen.
+
+Because CallResolutionScreen needs sessionId / currentUserId to navigate to
+PostResolutionScreen, we pass those values through when pushing to that screen.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+STEP 1 — call_resolution_screen.dart: add sessionId + currentUserId fields
+--------------------------------------------------------------------------------
+Find the class declaration (around line 8):
+
+  class CallResolutionScreen extends StatefulWidget {
+    final Map<String, dynamic> analysis;
+    final String? partnerName;
+
+    const CallResolutionScreen({
+      super.key,
+      required this.analysis,
+      this.partnerName,
+    });
+
+REPLACE with:
+
+  class CallResolutionScreen extends StatefulWidget {
+    final Map<String, dynamic> analysis;
+    final String? partnerName;
+    final String? sessionId;
+    final String? currentUserId;
+
+    const CallResolutionScreen({
+      super.key,
+      required this.analysis,
+      this.partnerName,
+      this.sessionId,
+      this.currentUserId,
+    });
+
+
+--------------------------------------------------------------------------------
+STEP 2 — call_resolution_screen.dart: add required imports at the top
+--------------------------------------------------------------------------------
+The file currently imports only flutter, screenutil, app_theme, aurora_background,
+and gradient_button.  Add these three lines with the existing imports:
+
+  import 'package:provider/provider.dart';
+  import '../../providers/firebase_app_state.dart';
+  import '../resolution/post_resolution_screen.dart';
+
+
+--------------------------------------------------------------------------------
+STEP 3 — call_resolution_screen.dart: replace bottom button
+--------------------------------------------------------------------------------
+Find this block near line 129 (inside the build method, after the Expanded PageView):
+
+  // ── Bottom action ────────────────────────────────────────────
+  Padding(
+    padding: EdgeInsets.all(20.w),
+    child: GradientButton(
+      text: 'Back to AI insights',
+      icon: Icons.arrow_back_rounded,
+      width: double.infinity,
+      onPressed: () => Navigator.pop(context),
+    ),
+  ),
+
+REPLACE with:
+
+  // ── Bottom action ────────────────────────────────────────────
+  Padding(
+    padding: EdgeInsets.all(20.w),
+    child: GradientButton(
+      text: 'Continue to reflection',
+      icon: Icons.arrow_forward_rounded,
+      width: double.infinity,
+      onPressed: _goToReflection,
+    ),
+  ),
+
+
+--------------------------------------------------------------------------------
+STEP 4 — call_resolution_screen.dart: add _goToReflection() method
+--------------------------------------------------------------------------------
+Add this method inside _CallResolutionScreenState, after the dispose() method
+(around line 36, before the build method):
+
+  void _goToReflection() {
+    context.read<FirebaseAppState>().clearTemporarySessionData();
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PostResolutionScreen(
+          sessionId: widget.sessionId ?? '',
+          currentUserId: widget.currentUserId,
+          partnerName: widget.partnerName,
+        ),
+      ),
+    );
+  }
+
+NOTE: Also remove the back-arrow GestureDetector from _buildHeader() if you no
+longer need it, or keep it as a simple Navigator.pop() — user's choice.
+
+
+--------------------------------------------------------------------------------
+STEP 5 — call_ai_analysis_screen.dart: pass new params when pushing resolution
+--------------------------------------------------------------------------------
+Find _goToResolutionScreen() (around line 120):
+
+  void _goToResolutionScreen() {
+    if (_result == null) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CallResolutionScreen(
+          analysis: _result!.analysis,
+          partnerName: widget.partnerName,
+        ),
+      ),
+    );
+  }
+
+REPLACE with:
+
+  void _goToResolutionScreen() {
+    if (_result == null) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CallResolutionScreen(
+          analysis: _result!.analysis,
+          partnerName: widget.partnerName,
+          sessionId: widget.sessionId,
+          currentUserId: widget.currentUserId,
+        ),
+      ),
+    );
+  }
+
+
+--------------------------------------------------------------------------------
+STEP 6 — call_ai_analysis_screen.dart: remove "Continue to reflection" TextButton
+--------------------------------------------------------------------------------
+Find this block in _buildResults() (around line 356):
+
+  Padding(
+    padding: EdgeInsets.all(20.w),
+    child: Column(
+      children: [
+        GradientButton(
+          text: 'Open resolution plan',
+          icon: Icons.auto_fix_high_rounded,
+          onPressed: _goToResolutionScreen,
+          width: double.infinity,
+        ),
+        SizedBox(height: 12.h),
+        TextButton(
+          onPressed: _goToReflection,
+          child: Text(
+            'Continue to reflection',
+            style: TextStyle(
+              color: AppTheme.textTertiary,
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+
+REPLACE with:
+
+  Padding(
+    padding: EdgeInsets.all(20.w),
+    child: GradientButton(
+      text: 'Open resolution plan',
+      icon: Icons.auto_fix_high_rounded,
+      onPressed: _goToResolutionScreen,
+      width: double.infinity,
+    ),
+  ),
+
+You may also delete the _goToReflection() method from call_ai_analysis_screen.dart
+(around lines 106–118) since nothing calls it anymore.
+
+
+================================================================================
+SUMMARY — FILES TOUCHED
+================================================================================
+
+  FILE                                              CHANGES
+  ─────────────────────────────────────────────────────────────────────────────
+  lib/screens/resolution/call_resolution_screen.dart   Add sessionId/currentUserId
+                                                       params, add 3 imports,
+                                                       add _goToReflection(),
+                                                       replace bottom button
+  lib/screens/resolution/call_ai_analysis_screen.dart  Pass new params to
+                                                       CallResolutionScreen,
+                                                       remove TextButton + its
+                                                       _goToReflection() method
+
+================================================================================
+DATA FLOW AFTER CHANGE
+================================================================================
+
+  CallAiAnalysisScreen
+       │  "Open resolution plan" button
+       ▼
+  CallResolutionScreen (receives sessionId, currentUserId, partnerName)
+       │  "Continue to reflection" button  → _goToReflection()
+       ▼
+  PostResolutionScreen
+
+================================================================================
+
+
+================================================================================
+SESSION HISTORY — "SEE SESSION INSIGHTS" & "SEE RESOLUTION PLAN" BUTTONS
+================================================================================
+Goal:
+  • Remove "Suggested Activities" from the session detail bottom sheet.
+  • Add "See Session Insights" and "See Resolution Plan" buttons above
+    "Start New Session" in the detail bottom sheet.
+  • Both buttons open read-only viewer screens that load the saved AI analysis
+    from Supabase (sessions.aiAnalysis column).
+
+KEY INSIGHT — NO NEW SAVING REQUIRED:
+  The AI analysis is ALREADY saved to Supabase by SessionAnalysisLoader when
+  the analysis first runs (it calls FirestoreSessionsService.saveCallAnalysis()
+  which writes aiTranscript, aiAnalysis, aiScores into the sessions table).
+  This happens before the user even sees the resolution plan. So the new viewer
+  screens only need to READ from Supabase — nothing new needs to be written on
+  "Continue to reflection".
+================================================================================
+
+
+================================================================================
+STEP 7 — CREATE: lib/screens/resolution/session_insights_history_screen.dart
+================================================================================
+PURPOSE: Read-only AI insights viewer opened from session history. Fetches
+         aiAnalysis/aiTranscript from Supabase via getSessionAiAnalysis() and
+         displays the same Overview / Conversation / Patterns / Scores tabs as
+         CallAiAnalysisScreen. No call-flow buttons — just a back arrow.
+================================================================================
+
+import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:provider/provider.dart';
+import '../../models/call_analysis_result.dart';
+import '../../providers/firebase_app_state.dart';
+import '../../services/firestore_sessions_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/aurora_background.dart';
+
+class SessionInsightsHistoryScreen extends StatefulWidget {
+  final String sessionId;
+  final String? partnerName;
+
+  const SessionInsightsHistoryScreen({
+    super.key,
+    required this.sessionId,
+    this.partnerName,
+  });
+
+  @override
+  State<SessionInsightsHistoryScreen> createState() =>
+      _SessionInsightsHistoryScreenState();
+}
+
+class _SessionInsightsHistoryScreenState
+    extends State<SessionInsightsHistoryScreen> {
+  final FirestoreSessionsService _service = FirestoreSessionsService();
+  final PageController _pageController = PageController();
+
+  CallAnalysisResult? _result;
+  bool _loading = true;
+  int _pageIndex = 0;
+
+  static const _pageTitles = ['Overview', 'Conversation', 'Patterns', 'Scores'];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final result = await _service.getSessionAiAnalysis(widget.sessionId);
+    if (mounted) {
+      setState(() {
+        _result = result;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ),
+        title: Text(
+          'Session Insights',
+          style: TextStyle(
+            color: AppTheme.textPrimary,
+            fontSize: 18.sp,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        actions: [
+          Padding(
+            padding: EdgeInsets.only(right: 16.w),
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              color: AppTheme.aiActive,
+              size: 22.sp,
+            ),
+          ),
+        ],
+      ),
+      body: AuroraBackground(
+        intensity: 0.65,
+        child: SafeArea(
+          child: _loading
+              ? Center(
+                  child: CircularProgressIndicator(color: AppTheme.aiActive),
+                )
+              : _result == null
+                  ? _buildNotAvailable()
+                  : _buildContent(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotAvailable() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(24.w),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.cloud_off_rounded,
+              color: AppTheme.textSecondary,
+              size: 56.sp,
+            ),
+            SizedBox(height: 16.h),
+            Text(
+              'Insights not available',
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 18.sp,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: 8.h),
+            Text(
+              'No AI analysis was found for this session. This may be an older session completed before AI insights were introduced.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 14.sp,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    final analysis = _result!.analysis;
+    final transcript = _result!.transcript;
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 36.h,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: 16.w),
+            itemCount: _pageTitles.length,
+            itemBuilder: (context, i) {
+              final selected = i == _pageIndex;
+              return Padding(
+                padding: EdgeInsets.only(right: 8.w),
+                child: ChoiceChip(
+                  label: Text(_pageTitles[i]),
+                  selected: selected,
+                  onSelected: (_) {
+                    setState(() => _pageIndex = i);
+                    _pageController.animateToPage(
+                      i,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOut,
+                    );
+                  },
+                  selectedColor: AppTheme.aiActive.withValues(alpha: 0.25),
+                  backgroundColor: AppTheme.backgroundTertiary,
+                  labelStyle: TextStyle(
+                    color: selected ? AppTheme.aiActive : AppTheme.textSecondary,
+                    fontSize: 12.sp,
+                  ),
+                  side: BorderSide(
+                    color: selected ? AppTheme.aiActive : AppTheme.glassBorder,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        SizedBox(height: 8.h),
+        Expanded(
+          child: PageView(
+            controller: _pageController,
+            onPageChanged: (i) => setState(() => _pageIndex = i),
+            children: [
+              _buildOverviewPage(analysis),
+              _buildTranscriptPage(transcript),
+              _buildPatternsPage(analysis),
+              _buildScoresPage(analysis),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOverviewPage(Map<String, dynamic> analysis) {
+    final summary = analysis['sessionSummary']?.toString() ?? '';
+    final tone = analysis['sessionEmotionalTone']?.toString() ?? '';
+    final feedback = analysis['overallFeedback']?.toString() ?? '';
+
+    return ListView(
+      padding: EdgeInsets.all(20.w),
+      children: [
+        _glassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle('Session summary', Icons.summarize_rounded),
+              SizedBox(height: 10.h),
+              Text(
+                summary.isNotEmpty ? summary : 'No summary available.',
+                style: _bodyStyle,
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 16.h),
+        _glassCard(
+          glowColor: AppTheme.partnerBGlow,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle('Emotional tone', Icons.mood_rounded),
+              SizedBox(height: 10.h),
+              Text(tone.isNotEmpty ? tone : '—', style: _bodyStyle),
+            ],
+          ),
+        ),
+        SizedBox(height: 16.h),
+        _glassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle('Overall feedback', Icons.feedback_rounded),
+              SizedBox(height: 10.h),
+              Text(feedback.isNotEmpty ? feedback : '—', style: _bodyStyle),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTranscriptPage(Map<String, dynamic> transcript) {
+    final dialogue = transcript['dialogueText']?.toString() ??
+        transcript['fullText']?.toString() ??
+        '';
+    final segments = transcript['segments'] as List? ?? [];
+
+    return ListView(
+      padding: EdgeInsets.all(20.w),
+      children: [
+        _glassCard(
+          glowColor: AppTheme.aiActive,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle('Conversation transcript', Icons.forum_rounded),
+              SizedBox(height: 8.h),
+              Text(
+                'Back-and-forth dialogue from your call',
+                style: TextStyle(
+                  color: AppTheme.textTertiary,
+                  fontSize: 12.sp,
+                ),
+              ),
+              SizedBox(height: 16.h),
+              if (segments.isNotEmpty)
+                ...segments.map((raw) {
+                  final seg = Map<String, dynamic>.from(raw as Map);
+                  final label = seg['dialogueLabel']?.toString() ??
+                      seg['speakerLabel']?.toString() ??
+                      'Speaker';
+                  final text = seg['text']?.toString() ?? '';
+                  final color = _speakerColor(label);
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: 14.h),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8.w,
+                            vertical: 4.h,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(8.r),
+                            border: Border.all(
+                              color: color.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 11.sp,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 10.w),
+                        Expanded(child: Text(text, style: _bodyStyle)),
+                      ],
+                    ),
+                  );
+                })
+              else
+                Text(
+                  dialogue.isNotEmpty
+                      ? dialogue
+                      : 'Transcript not available.',
+                  style: _bodyStyle.copyWith(height: 1.5),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPatternsPage(Map<String, dynamic> analysis) {
+    final patterns = _stringList(analysis['communicationPatterns']);
+    final behaviors = analysis['harmfulBehaviors'] as List? ?? [];
+    final responsibilities = analysis['responsibilityIndicators'] as List? ?? [];
+
+    return ListView(
+      padding: EdgeInsets.all(20.w),
+      children: [
+        _glassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle('Communication patterns', Icons.hub_rounded),
+              SizedBox(height: 12.h),
+              ...patterns.map((p) => _bullet(p, AppTheme.aiActive)),
+              if (patterns.isEmpty)
+                Text('None noted.', style: _bodyStyle),
+            ],
+          ),
+        ),
+        SizedBox(height: 16.h),
+        _glassCard(
+          glowColor: AppTheme.interruptionColor,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle('Behaviors to watch', Icons.warning_amber_rounded),
+              SizedBox(height: 12.h),
+              if (behaviors.isEmpty)
+                Text('No significant concerns flagged.', style: _bodyStyle)
+              else
+                ...behaviors.map((raw) {
+                  final b = Map<String, dynamic>.from(raw as Map);
+                  final severity = b['severity']?.toString() ?? 'low';
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: 12.h),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            _severityChip(severity),
+                            SizedBox(width: 8.w),
+                            Text(
+                              'Observed: ${b['observedIn'] ?? 'unclear'}',
+                              style: TextStyle(
+                                color: AppTheme.textTertiary,
+                                fontSize: 11.sp,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 6.h),
+                        Text(
+                          b['description']?.toString() ?? '',
+                          style: _bodyStyle,
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+            ],
+          ),
+        ),
+        SizedBox(height: 16.h),
+        _glassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle('Responsibility indicators', Icons.balance_rounded),
+              SizedBox(height: 12.h),
+              if (responsibilities.isEmpty)
+                Text('—', style: _bodyStyle)
+              else
+                ...responsibilities.map((raw) {
+                  final r = Map<String, dynamic>.from(raw as Map);
+                  final pid = r['partnerId']?.toString() ?? '';
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: 10.h),
+                    child: Text(
+                      '${_partnerLabel(pid)}: ${r['indicator'] ?? ''}',
+                      style: _bodyStyle,
+                    ),
+                  );
+                }),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildScoresPage(Map<String, dynamic> analysis) {
+    final partnerScores = analysis['partnerScores'] as List? ?? [];
+    final appState = context.read<FirebaseAppState>();
+
+    return ListView(
+      padding: EdgeInsets.all(20.w),
+      children: [
+        Text(
+          'AI communication scores (0–100)',
+          style: TextStyle(color: AppTheme.textTertiary, fontSize: 13.sp),
+        ),
+        SizedBox(height: 16.h),
+        ...partnerScores.map((raw) {
+          final entry = Map<String, dynamic>.from(raw as Map);
+          final partnerId = entry['partnerId']?.toString() ?? '';
+          final scores =
+              Map<String, dynamic>.from(entry['scores'] as Map? ?? {});
+          final name = _resolvePartnerName(appState, partnerId);
+          final color = AppTheme.getPartnerColor(partnerId);
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: 16.h),
+            child: _glassCard(
+              glowColor: color,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 12.h),
+                  _scoreBar('Overall', scores['overall'], color),
+                  _scoreBar('Empathy', scores['empathy'], color),
+                  _scoreBar('Listening', scores['listening'], color),
+                  _scoreBar('Reception', scores['reception'], color),
+                  _scoreBar('Clarity', scores['clarity'], color),
+                  _scoreBar('Respect', scores['respect'], color),
+                  _scoreBar('Responsiveness', scores['responsiveness'], color),
+                  _scoreBar('Open-mindedness', scores['openMindedness'], color),
+                ],
+              ),
+            ),
+          );
+        }),
+        if (partnerScores.isEmpty)
+          _glassCard(
+            child: Text('Scores not available.', style: _bodyStyle),
+          ),
+      ],
+    );
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  Widget _glassCard({required Widget child, Color? glowColor}) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(16.w),
+      decoration: AppTheme.glassmorphicDecoration(
+        borderRadius: 16,
+        hasGlow: glowColor != null,
+        glowColor: glowColor ?? AppTheme.aiActive,
+      ),
+      child: child,
+    );
+  }
+
+  Widget _sectionTitle(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, color: AppTheme.aiActive, size: 18.sp),
+        SizedBox(width: 8.w),
+        Text(
+          title,
+          style: TextStyle(
+            color: AppTheme.textPrimary,
+            fontSize: 15.sp,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _bullet(String text, Color color) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 8.h),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: EdgeInsets.only(top: 6.h),
+            width: 6.w,
+            height: 6.w,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          SizedBox(width: 10.w),
+          Expanded(child: Text(text, style: _bodyStyle)),
+        ],
+      ),
+    );
+  }
+
+  Widget _scoreBar(String label, dynamic value, Color color) {
+    final v = (value is num) ? value.toInt().clamp(0, 100) : 0;
+    return Padding(
+      padding: EdgeInsets.only(bottom: 10.h),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 12.sp,
+                ),
+              ),
+              Text(
+                '$v',
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 4.h),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4.r),
+            child: LinearProgressIndicator(
+              value: v / 100,
+              minHeight: 6.h,
+              backgroundColor: AppTheme.backgroundQuaternary,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _severityChip(String severity) {
+    Color c = AppTheme.textTertiary;
+    if (severity == 'high') c = AppTheme.interruptionColor;
+    if (severity == 'medium') c = AppTheme.neonCoral;
+    if (severity == 'low') c = AppTheme.successGreen;
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(6.r),
+      ),
+      child: Text(
+        severity.toUpperCase(),
+        style: TextStyle(
+          color: c,
+          fontSize: 10.sp,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Color _speakerColor(String label) {
+    final l = label.toLowerCase();
+    if (l.contains('male') && !l.contains('female')) return AppTheme.partnerAGlow;
+    if (l.contains('female')) return AppTheme.partnerBGlow;
+    return AppTheme.aiActive;
+  }
+
+  String _partnerLabel(String partnerId) =>
+      _resolvePartnerName(context.read<FirebaseAppState>(), partnerId);
+
+  String _resolvePartnerName(FirebaseAppState appState, String partnerId) {
+    final a = appState.getCurrentPartner();
+    final b = appState.getOtherPartner();
+    if (a?.id == partnerId) return a!.name;
+    if (b?.id == partnerId) return b!.name;
+    if (partnerId == 'A') return a?.name ?? 'Partner A';
+    if (partnerId == 'B') return b?.name ?? 'Partner B';
+    return partnerId;
+  }
+
+  List<String> _stringList(dynamic raw) {
+    if (raw is! List) return [];
+    return raw.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
+  }
+
+  TextStyle get _bodyStyle => TextStyle(
+        color: AppTheme.textSecondary,
+        fontSize: 14.sp,
+        height: 1.45,
+      );
+}
+
+
+================================================================================
+STEP 8 — CREATE: lib/screens/resolution/session_resolution_history_screen.dart
+================================================================================
+PURPOSE: Read-only resolution plan viewer opened from session history. Fetches
+         aiAnalysis from Supabase and displays the same Escalators / Actions /
+         Shared plan / Next steps tabs as CallResolutionScreen.
+         "Close" button (AppBar back) instead of "Continue to reflection".
+================================================================================
+
+import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../../models/call_analysis_result.dart';
+import '../../services/firestore_sessions_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/aurora_background.dart';
+
+class SessionResolutionHistoryScreen extends StatefulWidget {
+  final String sessionId;
+  final String? partnerName;
+
+  const SessionResolutionHistoryScreen({
+    super.key,
+    required this.sessionId,
+    this.partnerName,
+  });
+
+  @override
+  State<SessionResolutionHistoryScreen> createState() =>
+      _SessionResolutionHistoryScreenState();
+}
+
+class _SessionResolutionHistoryScreenState
+    extends State<SessionResolutionHistoryScreen> {
+  final FirestoreSessionsService _service = FirestoreSessionsService();
+  final PageController _pageController = PageController();
+
+  CallAnalysisResult? _result;
+  bool _loading = true;
+  int _pageIndex = 0;
+
+  static const _pageTitles = [
+    'Escalators',
+    'Actions',
+    'Shared plan',
+    'Next steps',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final result = await _service.getSessionAiAnalysis(widget.sessionId);
+    if (mounted) {
+      setState(() {
+        _result = result;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ),
+        title: Text(
+          'Resolution Plan',
+          style: TextStyle(
+            color: AppTheme.textPrimary,
+            fontSize: 18.sp,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        actions: [
+          Padding(
+            padding: EdgeInsets.only(right: 16.w),
+            child: Icon(
+              Icons.auto_fix_high_rounded,
+              color: AppTheme.aiActive,
+              size: 22.sp,
+            ),
+          ),
+        ],
+      ),
+      body: AuroraBackground(
+        intensity: 0.65,
+        child: SafeArea(
+          child: _loading
+              ? Center(
+                  child: CircularProgressIndicator(color: AppTheme.aiActive),
+                )
+              : _result == null
+                  ? _buildNotAvailable()
+                  : _buildContent(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotAvailable() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(24.w),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.cloud_off_rounded,
+              color: AppTheme.textSecondary,
+              size: 56.sp,
+            ),
+            SizedBox(height: 16.h),
+            Text(
+              'Resolution plan not available',
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 18.sp,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: 8.h),
+            Text(
+              'No AI analysis was found for this session.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 14.sp,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    final analysis = _result!.analysis;
+    final resolutionActions = Map<String, dynamic>.from(
+      analysis['resolutionActions'] as Map? ?? {},
+    );
+
+    final conflictEscalators =
+        resolutionActions['conflictEscalators'] as List? ?? [];
+    final partnerActionPlans =
+        resolutionActions['partnerActionPlans'] as List? ?? [];
+    final sharedSolutions =
+        resolutionActions['sharedSolutions'] as List? ?? [];
+
+    final resolutionSteps = _stringList(analysis['resolutionSteps']);
+    final improvementSuggestions =
+        _stringList(analysis['improvementSuggestions']);
+    final bondingActivities =
+        _stringList(analysis['suggestedBondingActivities']);
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 36.h,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: 16.w),
+            itemCount: _pageTitles.length,
+            itemBuilder: (context, i) {
+              final selected = i == _pageIndex;
+              return Padding(
+                padding: EdgeInsets.only(right: 8.w),
+                child: ChoiceChip(
+                  label: Text(_pageTitles[i]),
+                  selected: selected,
+                  onSelected: (_) {
+                    setState(() => _pageIndex = i);
+                    _pageController.animateToPage(
+                      i,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOut,
+                    );
+                  },
+                  selectedColor: AppTheme.aiActive.withValues(alpha: 0.25),
+                  backgroundColor: AppTheme.backgroundTertiary,
+                  labelStyle: TextStyle(
+                    color: selected
+                        ? AppTheme.aiActive
+                        : AppTheme.textSecondary,
+                    fontSize: 12.sp,
+                  ),
+                  side: BorderSide(
+                    color: selected
+                        ? AppTheme.aiActive
+                        : AppTheme.glassBorder,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        SizedBox(height: 8.h),
+        Expanded(
+          child: PageView(
+            controller: _pageController,
+            onPageChanged: (i) => setState(() => _pageIndex = i),
+            children: [
+              _buildEscalatorsPage(conflictEscalators),
+              _buildActionsPage(partnerActionPlans),
+              _buildSharedPlanPage(sharedSolutions),
+              _buildNextStepsPage(
+                resolutionSteps,
+                improvementSuggestions,
+                bondingActivities,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEscalatorsPage(List conflictEscalators) {
+    return ListView(
+      padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 20.h),
+      children: [
+        if (conflictEscalators.isEmpty)
+          _glassCard(
+            child: Text(
+              'No conflict escalators were identified.',
+              style: _bodyStyle,
+            ),
+          )
+        else
+          _conflictEscalatorsCard(conflictEscalators),
+      ],
+    );
+  }
+
+  Widget _buildActionsPage(List partnerActionPlans) {
+    return ListView(
+      padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 20.h),
+      children: [
+        if (partnerActionPlans.isEmpty)
+          _glassCard(
+            child: Text(
+              'No partner action plans available.',
+              style: _bodyStyle,
+            ),
+          )
+        else
+          _partnerActionPlansCard(partnerActionPlans),
+      ],
+    );
+  }
+
+  Widget _buildSharedPlanPage(List sharedSolutions) {
+    return ListView(
+      padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 20.h),
+      children: [
+        if (sharedSolutions.isEmpty)
+          _glassCard(
+            child: Text(
+              'No shared solutions available.',
+              style: _bodyStyle,
+            ),
+          )
+        else
+          _sharedSolutionsCard(sharedSolutions),
+      ],
+    );
+  }
+
+  Widget _buildNextStepsPage(
+    List<String> resolutionSteps,
+    List<String> improvementSuggestions,
+    List<String> bondingActivities,
+  ) {
+    final isEmpty = resolutionSteps.isEmpty &&
+        improvementSuggestions.isEmpty &&
+        bondingActivities.isEmpty;
+
+    return ListView(
+      padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 20.h),
+      children: [
+        if (isEmpty)
+          _glassCard(
+            child: Text('No next steps available.', style: _bodyStyle),
+          ),
+        if (resolutionSteps.isNotEmpty)
+          _simpleListCard(
+            title: 'Resolution steps',
+            icon: Icons.route_rounded,
+            color: AppTheme.successGreen,
+            items: resolutionSteps,
+          ),
+        if (resolutionSteps.isNotEmpty) SizedBox(height: 16.h),
+        if (improvementSuggestions.isNotEmpty)
+          _simpleListCard(
+            title: 'Improve together',
+            icon: Icons.trending_up_rounded,
+            color: AppTheme.neonBlue,
+            items: improvementSuggestions,
+          ),
+        if (improvementSuggestions.isNotEmpty) SizedBox(height: 16.h),
+        if (bondingActivities.isNotEmpty)
+          _simpleListCard(
+            title: 'Reconnect gently',
+            icon: Icons.favorite_border_rounded,
+            color: AppTheme.partnerBGlow,
+            items: bondingActivities,
+          ),
+      ],
+    );
+  }
+
+  // ── Cards ─────────────────────────────────────────────────────────────────
+
+  Widget _conflictEscalatorsCard(List items) {
+    return _glassCard(
+      glowColor: AppTheme.neonCoral,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(
+            'What raised the conflict',
+            Icons.local_fire_department_rounded,
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            'These are not labels or blame. They are patterns that may have increased tension.',
+            style: TextStyle(
+              color: AppTheme.textTertiary,
+              fontSize: 12.sp,
+              height: 1.4,
+            ),
+          ),
+          SizedBox(height: 16.h),
+          ...items.map((raw) {
+            final item = Map<String, dynamic>.from(raw as Map);
+            final partnerName =
+                item['partnerName']?.toString() ?? 'Partner';
+            final behavior = item['behavior']?.toString() ?? '';
+            final impact = item['impact']?.toString() ?? '';
+            final betterAlternative =
+                item['betterAlternative']?.toString() ?? '';
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: 16.h),
+              child: Container(
+                padding: EdgeInsets.all(14.w),
+                decoration: BoxDecoration(
+                  color: AppTheme.backgroundTertiary.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(14.r),
+                  border: Border.all(
+                    color: AppTheme.glassBorder.withValues(alpha: 0.7),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _miniLabel(partnerName, AppTheme.neonCoral),
+                    SizedBox(height: 10.h),
+                    if (behavior.isNotEmpty)
+                      _infoBlock(
+                        title: 'Behavior',
+                        text: behavior,
+                        icon: Icons.chat_bubble_outline_rounded,
+                      ),
+                    if (impact.isNotEmpty) SizedBox(height: 10.h),
+                    if (impact.isNotEmpty)
+                      _infoBlock(
+                        title: 'Possible impact',
+                        text: impact,
+                        icon: Icons.psychology_alt_rounded,
+                      ),
+                    if (betterAlternative.isNotEmpty) SizedBox(height: 10.h),
+                    if (betterAlternative.isNotEmpty)
+                      _infoBlock(
+                        title: 'Better alternative',
+                        text: betterAlternative,
+                        icon: Icons.lightbulb_outline_rounded,
+                      ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _partnerActionPlansCard(List plans) {
+    return _glassCard(
+      glowColor: AppTheme.aiActive,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(
+            'Actions for each partner',
+            Icons.task_alt_rounded,
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            'Small, practical actions each person can take to reduce defensiveness and repair trust.',
+            style: TextStyle(
+              color: AppTheme.textTertiary,
+              fontSize: 12.sp,
+              height: 1.4,
+            ),
+          ),
+          SizedBox(height: 16.h),
+          ...plans.map((raw) {
+            final plan = Map<String, dynamic>.from(raw as Map);
+            final partnerName =
+                plan['partnerName']?.toString() ?? 'Partner';
+            final actions = plan['actions'] as List? ?? [];
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: 18.h),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _miniLabel(partnerName, AppTheme.aiActive),
+                  SizedBox(height: 12.h),
+                  ...actions.map((rawAction) {
+                    final action =
+                        Map<String, dynamic>.from(rawAction as Map);
+                    return _actionTile(
+                      title: action['title']?.toString() ?? 'Action',
+                      description:
+                          action['description']?.toString() ?? '',
+                      whyItHelps:
+                          action['whyItHelps']?.toString() ?? '',
+                    );
+                  }),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _sharedSolutionsCard(List solutions) {
+    return _glassCard(
+      glowColor: AppTheme.successGreen,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle('Shared repair plan', Icons.handshake_rounded),
+          SizedBox(height: 8.h),
+          Text(
+            'Steps both partners can try together instead of trying to win the argument.',
+            style: TextStyle(
+              color: AppTheme.textTertiary,
+              fontSize: 12.sp,
+              height: 1.4,
+            ),
+          ),
+          SizedBox(height: 16.h),
+          ...solutions.map((raw) {
+            final item = Map<String, dynamic>.from(raw as Map);
+            final title = item['title']?.toString() ?? '';
+            final description = item['description']?.toString() ?? '';
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: 12.h),
+              child: Container(
+                padding: EdgeInsets.all(14.w),
+                decoration: BoxDecoration(
+                  color: AppTheme.successGreen.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14.r),
+                  border: Border.all(
+                    color: AppTheme.successGreen.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.check_circle_rounded,
+                      color: AppTheme.successGreen,
+                      size: 18.sp,
+                    ),
+                    SizedBox(width: 10.w),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (title.isNotEmpty)
+                            Text(
+                              title,
+                              style: TextStyle(
+                                color: AppTheme.textPrimary,
+                                fontSize: 14.sp,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          if (description.isNotEmpty) SizedBox(height: 6.h),
+                          if (description.isNotEmpty)
+                            Text(description, style: _bodyStyle),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _simpleListCard({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required List<String> items,
+  }) {
+    return _glassCard(
+      glowColor: color,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(title, icon),
+          SizedBox(height: 12.h),
+          ...items.map((item) => _bullet(item, color)),
+        ],
+      ),
+    );
+  }
+
+  // ── Shared helpers ────────────────────────────────────────────────────────
+
+  Widget _actionTile({
+    required String title,
+    required String description,
+    required String whyItHelps,
+  }) {
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: 12.h),
+      padding: EdgeInsets.all(14.w),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundTertiary.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(14.r),
+        border: Border.all(
+          color: AppTheme.glassBorder.withValues(alpha: 0.7),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.arrow_forward_rounded,
+                color: AppTheme.aiActive,
+                size: 17.sp,
+              ),
+              SizedBox(width: 8.w),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (description.isNotEmpty) SizedBox(height: 8.h),
+          if (description.isNotEmpty) Text(description, style: _bodyStyle),
+          if (whyItHelps.isNotEmpty) SizedBox(height: 10.h),
+          if (whyItHelps.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(10.w),
+              decoration: BoxDecoration(
+                color: AppTheme.aiActive.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10.r),
+              ),
+              child: Text(
+                'Why it helps: $whyItHelps',
+                style: TextStyle(
+                  color: AppTheme.textTertiary,
+                  fontSize: 12.sp,
+                  height: 1.4,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoBlock({
+    required String title,
+    required String text,
+    required IconData icon,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: AppTheme.textTertiary, size: 16.sp),
+        SizedBox(width: 8.w),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: '$title: ',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                  ),
+                ),
+                TextSpan(
+                  text: text,
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 13.sp,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _miniLabel(String label, Color color) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8.r),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 12.sp,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _glassCard({required Widget child, Color? glowColor}) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(16.w),
+      decoration: AppTheme.glassmorphicDecoration(
+        borderRadius: 16,
+        hasGlow: glowColor != null,
+        glowColor: glowColor ?? AppTheme.aiActive,
+      ),
+      child: child,
+    );
+  }
+
+  Widget _sectionTitle(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, color: AppTheme.aiActive, size: 18.sp),
+        SizedBox(width: 8.w),
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 15.sp,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _bullet(String text, Color color) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 8.h),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: EdgeInsets.only(top: 6.h),
+            width: 6.w,
+            height: 6.w,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          SizedBox(width: 10.w),
+          Expanded(child: Text(text, style: _bodyStyle)),
+        ],
+      ),
+    );
+  }
+
+  List<String> _stringList(dynamic raw) {
+    if (raw is! List) return [];
+    return raw.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
+  }
+
+  TextStyle get _bodyStyle => TextStyle(
+        color: AppTheme.textSecondary,
+        fontSize: 14.sp,
+        height: 1.45,
+      );
+}
+
+
+================================================================================
+STEP 9 — MODIFY: lib/screens/main/session_history_screen.dart (3 CHANGES)
+================================================================================
+PURPOSE: Wire up the two new screens from the session detail bottom sheet
+         and remove the Suggested Activities section.
+================================================================================
+
+
+--- CHANGE A: Add 2 imports near the top (with the other resolution imports) ---
+
+Add these two lines alongside the existing imports:
+
+  import '../resolution/session_insights_history_screen.dart';
+  import '../resolution/session_resolution_history_screen.dart';
+
+
+--- CHANGE B + C combined: In _showDetails() replace the suggestedActivities
+    block AND the Start New Session footer with the new layout ---
+
+Find this entire block (inside the ListView children in _showDetails()):
+
+                    if (session.suggestedActivities.isNotEmpty) ...[
+                      SizedBox(height: 20.h),
+                      _sectionLabel('Suggested Activities'),
+                      SizedBox(height: 8.h),
+                      ...session.suggestedActivities.map(
+                        (a) => Padding(
+                          padding: EdgeInsets.only(bottom: 8.h),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.check_circle_rounded,
+                                color: AppTheme.successGreen,
+                                size: 16.sp,
+                              ),
+                              SizedBox(width: 10.w),
+                              Expanded(
+                                child: Text(
+                                  a,
+                                  style: TextStyle(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 14.sp,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    SizedBox(height: 28.h),
+                    Consumer<FirebaseAppState>(
+                      builder: (context, appState, _) => GradientButton(
+                        text: 'Start New Session',
+                        icon: Icons.call_rounded,
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _startNewSession(appState);
+                        },
+                      ),
+                    ),
+                    SizedBox(height: 16.h),
+
+REPLACE with:
+
+                    SizedBox(height: 20.h),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SessionInsightsHistoryScreen(
+                                sessionId: session.id,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: Icon(Icons.auto_awesome_rounded, size: 18.sp),
+                        label: const Text('See Session Insights'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.aiActive,
+                          side: BorderSide(
+                            color: AppTheme.aiActive.withValues(alpha: 0.5),
+                          ),
+                          padding: EdgeInsets.symmetric(vertical: 14.h),
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppTheme.radiusL),
+                          ),
+                          textStyle: TextStyle(
+                            fontSize: 14.sp,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 8.h),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SessionResolutionHistoryScreen(
+                                sessionId: session.id,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: Icon(Icons.auto_fix_high_rounded, size: 18.sp),
+                        label: const Text('See Resolution Plan'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.successGreen,
+                          side: BorderSide(
+                            color:
+                                AppTheme.successGreen.withValues(alpha: 0.5),
+                          ),
+                          padding: EdgeInsets.symmetric(vertical: 14.h),
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppTheme.radiusL),
+                          ),
+                          textStyle: TextStyle(
+                            fontSize: 14.sp,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16.h),
+                    Consumer<FirebaseAppState>(
+                      builder: (context, appState, _) => GradientButton(
+                        text: 'Start New Session',
+                        icon: Icons.call_rounded,
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _startNewSession(appState);
+                        },
+                      ),
+                    ),
+                    SizedBox(height: 16.h),
+
+NOTE: Inside the bottom sheet builder, 'ctx' is the DraggableScrollableSheet
+context (used to pop the sheet) and 'context' is the State's BuildContext
+(captured in the closure, used to push new routes). This is the same pattern
+already used by the "Start New Session" button above.
+
+
+================================================================================
+SUMMARY — FILES TOUCHED
+================================================================================
+
+  FILE                                                  ACTION
+  ─────────────────────────────────────────────────────────────────────────────
+  lib/screens/resolution/session_insights_history_screen.dart   CREATE (new)
+  lib/screens/resolution/session_resolution_history_screen.dart CREATE (new)
+  lib/screens/main/session_history_screen.dart                  ADD 2 imports
+                                                                 REPLACE block
+                                                                 in _showDetails()
+
+  No changes needed to call_resolution_screen.dart or any other file.
+  No new Supabase columns or writes are required — aiAnalysis is already
+  saved when SessionAnalysisLoader.loadOrAnalyze() runs during the session.
+
+
+================================================================================
+DATA FLOW AFTER CHANGE
+================================================================================
+
+  Session ends → AI analysis runs → saved to sessions.aiAnalysis (Supabase)
+       │
+  User opens Session History
+       │
+       ▼
+  Session detail bottom sheet
+       │  "See Session Insights"  → SessionInsightsHistoryScreen(sessionId)
+       │                              fetches sessions.aiAnalysis via
+       │                              FirestoreSessionsService.getSessionAiAnalysis()
+       │                              shows Overview / Conversation / Patterns / Scores
+       │
+       │  "See Resolution Plan"   → SessionResolutionHistoryScreen(sessionId)
+       │                              fetches sessions.aiAnalysis via
+       │                              FirestoreSessionsService.getSessionAiAnalysis()
+       │                              shows Escalators / Actions / Shared plan / Next steps
+       │
+       │  "Start New Session"     → existing flow (unchanged)
+
+================================================================================
+END OF FILE
+================================================================================

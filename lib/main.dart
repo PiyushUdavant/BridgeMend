@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:mend_ai/services/hive_service.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'providers/firebase_app_state.dart';
@@ -9,6 +10,8 @@ import 'widgets/aurora_background.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await HiveService.init();
 
   await Supabase.initialize(
     url: const String.fromEnvironment(

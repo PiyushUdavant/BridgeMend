@@ -1,33 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-
+import '../../models/call_analysis_result.dart';
+import '../../services/firestore_sessions_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/aurora_background.dart';
-import '../../widgets/gradient_button.dart';
-import 'package:provider/provider.dart';
-import '../../providers/firebase_app_state.dart';
-import '../resolution/post_resolution_screen.dart';
 
-class CallResolutionScreen extends StatefulWidget {
-  final Map<String, dynamic> analysis;
-    final String? partnerName;
-    final String? sessionId;
-    final String? currentUserId;
+class SessionResolutionHistoryScreen extends StatefulWidget {
+  final String sessionId;
+  final String? partnerName;
 
-  const CallResolutionScreen({
+  const SessionResolutionHistoryScreen({
     super.key,
-    required this.analysis,
+    required this.sessionId,
     this.partnerName,
-    this.sessionId,
-    this.currentUserId,
   });
 
   @override
-  State<CallResolutionScreen> createState() => _CallResolutionScreenState();
+  State<SessionResolutionHistoryScreen> createState() =>
+      _SessionResolutionHistoryScreenState();
 }
 
-class _CallResolutionScreenState extends State<CallResolutionScreen> {
+class _SessionResolutionHistoryScreenState
+    extends State<SessionResolutionHistoryScreen> {
+  final FirestoreSessionsService _service = FirestoreSessionsService();
   final PageController _pageController = PageController();
+
+  CallAnalysisResult? _result;
+  bool _loading = true;
   int _pageIndex = 0;
 
   static const _pageTitles = [
@@ -38,29 +37,112 @@ class _CallResolutionScreenState extends State<CallResolutionScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
     super.dispose();
   }
 
-  void _goToReflection() {
-    context.read<FirebaseAppState>().clearTemporarySessionData();
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PostResolutionScreen(
-          sessionId: widget.sessionId ?? '',
-          currentUserId: widget.currentUserId,
-          partnerName: widget.partnerName,
+  Future<void> _load() async {
+    final result = await _service.getSessionAiAnalysis(widget.sessionId);
+    if (mounted) {
+      setState(() {
+        _result = result;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ),
+        title: Text(
+          'Resolution Plan',
+          style: TextStyle(
+            color: AppTheme.textPrimary,
+            fontSize: 18.sp,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        actions: [
+          Padding(
+            padding: EdgeInsets.only(right: 16.w),
+            child: Icon(
+              Icons.auto_fix_high_rounded,
+              color: AppTheme.aiActive,
+              size: 22.sp,
+            ),
+          ),
+        ],
+      ),
+      body: AuroraBackground(
+        intensity: 0.65,
+        child: SafeArea(
+          child: _loading
+              ? Center(
+                  child: CircularProgressIndicator(color: AppTheme.aiActive),
+                )
+              : _result == null
+                  ? _buildNotAvailable()
+                  : _buildContent(),
         ),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildNotAvailable() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(24.w),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.cloud_off_rounded,
+              color: AppTheme.textSecondary,
+              size: 56.sp,
+            ),
+            SizedBox(height: 16.h),
+            Text(
+              'Resolution plan not available',
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 18.sp,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: 8.h),
+            Text(
+              'No AI analysis was found for this session.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 14.sp,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    final analysis = _result!.analysis;
     final resolutionActions = Map<String, dynamic>.from(
-      widget.analysis['resolutionActions'] as Map? ?? {},
+      analysis['resolutionActions'] as Map? ?? {},
     );
 
     final conflictEscalators =
@@ -70,100 +152,73 @@ class _CallResolutionScreenState extends State<CallResolutionScreen> {
     final sharedSolutions =
         resolutionActions['sharedSolutions'] as List? ?? [];
 
-    final resolutionSteps =
-        _stringList(widget.analysis['resolutionSteps']);
+    final resolutionSteps = _stringList(analysis['resolutionSteps']);
     final improvementSuggestions =
-        _stringList(widget.analysis['improvementSuggestions']);
+        _stringList(analysis['improvementSuggestions']);
     final bondingActivities =
-        _stringList(widget.analysis['suggestedBondingActivities']);
+        _stringList(analysis['suggestedBondingActivities']);
 
-    return Scaffold(
-      body: AuroraBackground(
-        intensity: 0.65,
-        child: SafeArea(
-          child: Column(
-            children: [
-              // ── Header ──────────────────────────────────────────────────
-              _buildHeader(context),
-
-              // ── Tab chips ───────────────────────────────────────────────
-              SizedBox(
-                height: 36.h,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: EdgeInsets.symmetric(horizontal: 16.w),
-                  itemCount: _pageTitles.length,
-                  itemBuilder: (context, i) {
-                    final selected = i == _pageIndex;
-                    return Padding(
-                      padding: EdgeInsets.only(right: 8.w),
-                      child: ChoiceChip(
-                        label: Text(_pageTitles[i]),
-                        selected: selected,
-                        onSelected: (_) {
-                          setState(() => _pageIndex = i);
-                          _pageController.animateToPage(
-                            i,
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeOut,
-                          );
-                        },
-                        selectedColor:
-                            AppTheme.aiActive.withValues(alpha: 0.25),
-                        backgroundColor: AppTheme.backgroundTertiary,
-                        labelStyle: TextStyle(
-                          color: selected
-                              ? AppTheme.aiActive
-                              : AppTheme.textSecondary,
-                          fontSize: 12.sp,
-                        ),
-                        side: BorderSide(
-                          color: selected
-                              ? AppTheme.aiActive
-                              : AppTheme.glassBorder,
-                        ),
-                      ),
+    return Column(
+      children: [
+        SizedBox(
+          height: 36.h,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: 16.w),
+            itemCount: _pageTitles.length,
+            itemBuilder: (context, i) {
+              final selected = i == _pageIndex;
+              return Padding(
+                padding: EdgeInsets.only(right: 8.w),
+                child: ChoiceChip(
+                  label: Text(_pageTitles[i]),
+                  selected: selected,
+                  onSelected: (_) {
+                    setState(() => _pageIndex = i);
+                    _pageController.animateToPage(
+                      i,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOut,
                     );
                   },
+                  selectedColor: AppTheme.aiActive.withValues(alpha: 0.25),
+                  backgroundColor: AppTheme.backgroundTertiary,
+                  labelStyle: TextStyle(
+                    color: selected
+                        ? AppTheme.aiActive
+                        : AppTheme.textSecondary,
+                    fontSize: 12.sp,
+                  ),
+                  side: BorderSide(
+                    color: selected
+                        ? AppTheme.aiActive
+                        : AppTheme.glassBorder,
+                  ),
                 ),
-              ),
-
-              // ── PageView ────────────────────────────────────────────────
-              Expanded(
-                child: PageView(
-                  controller: _pageController,
-                  onPageChanged: (i) => setState(() => _pageIndex = i),
-                  children: [
-                    _buildEscalatorsPage(conflictEscalators),
-                    _buildActionsPage(partnerActionPlans),
-                    _buildSharedPlanPage(sharedSolutions),
-                    _buildNextStepsPage(
-                      resolutionSteps,
-                      improvementSuggestions,
-                      bondingActivities,
-                    ),
-                  ],
-                ),
-              ),
-
-              // ── Bottom action ────────────────────────────────────────────
-              Padding(
-                padding: EdgeInsets.all(20.w),
-                child: GradientButton(
-                  text: 'Continue to reflection',
-                  icon: Icons.arrow_forward_rounded,
-                  width: double.infinity,
-                  onPressed: _goToReflection,
-                ),
+              );
+            },
+          ),
+        ),
+        SizedBox(height: 8.h),
+        Expanded(
+          child: PageView(
+            controller: _pageController,
+            onPageChanged: (i) => setState(() => _pageIndex = i),
+            children: [
+              _buildEscalatorsPage(conflictEscalators),
+              _buildActionsPage(partnerActionPlans),
+              _buildSharedPlanPage(sharedSolutions),
+              _buildNextStepsPage(
+                resolutionSteps,
+                improvementSuggestions,
+                bondingActivities,
               ),
             ],
           ),
         ),
-      ),
+      ],
     );
   }
-
-  // ── Pages ────────────────────────────────────────────────────────────────
 
   Widget _buildEscalatorsPage(List conflictEscalators) {
     return ListView(
@@ -259,62 +314,7 @@ class _CallResolutionScreenState extends State<CallResolutionScreen> {
     );
   }
 
-  // ── Section cards ────────────────────────────────────────────────────────
-
-  Widget _buildHeader(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 12.h),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 38.w,
-              height: 38.w,
-              decoration: AppTheme.glassmorphicDecoration(
-                borderRadius: 12,
-                hasGlow: false,
-              ),
-              child: Icon(
-                Icons.arrow_back_rounded,
-                color: AppTheme.textPrimary,
-                size: 20.sp,
-              ),
-            ),
-          ),
-          SizedBox(width: 12.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Resolution plan',
-                  style: TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 20.sp,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 2.h),
-                Text(
-                  'AI-guided actions to repair the conflict',
-                  style: TextStyle(
-                    color: AppTheme.textTertiary,
-                    fontSize: 12.sp,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Icon(
-            Icons.auto_fix_high_rounded,
-            color: AppTheme.aiActive,
-            size: 22.sp,
-          ),
-        ],
-      ),
-    );
-  }
+  // ── Cards ─────────────────────────────────────────────────────────────────
 
   Widget _conflictEscalatorsCard(List items) {
     return _glassCard(
@@ -397,7 +397,10 @@ class _CallResolutionScreenState extends State<CallResolutionScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionTitle('Actions for each partner', Icons.task_alt_rounded),
+          _sectionTitle(
+            'Actions for each partner',
+            Icons.task_alt_rounded,
+          ),
           SizedBox(height: 8.h),
           Text(
             'Small, practical actions each person can take to reduce defensiveness and repair trust.',
@@ -468,8 +471,7 @@ class _CallResolutionScreenState extends State<CallResolutionScreen> {
               child: Container(
                 padding: EdgeInsets.all(14.w),
                 decoration: BoxDecoration(
-                  color:
-                      AppTheme.successGreen.withValues(alpha: 0.08),
+                  color: AppTheme.successGreen.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(14.r),
                   border: Border.all(
                     color: AppTheme.successGreen.withValues(alpha: 0.25),
@@ -497,8 +499,7 @@ class _CallResolutionScreenState extends State<CallResolutionScreen> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                          if (description.isNotEmpty)
-                            SizedBox(height: 6.h),
+                          if (description.isNotEmpty) SizedBox(height: 6.h),
                           if (description.isNotEmpty)
                             Text(description, style: _bodyStyle),
                         ],
@@ -533,7 +534,7 @@ class _CallResolutionScreenState extends State<CallResolutionScreen> {
     );
   }
 
-  // ── Shared helpers ───────────────────────────────────────────────────────
+  // ── Shared helpers ────────────────────────────────────────────────────────
 
   Widget _actionTile({
     required String title,
@@ -575,8 +576,7 @@ class _CallResolutionScreenState extends State<CallResolutionScreen> {
             ],
           ),
           if (description.isNotEmpty) SizedBox(height: 8.h),
-          if (description.isNotEmpty)
-            Text(description, style: _bodyStyle),
+          if (description.isNotEmpty) Text(description, style: _bodyStyle),
           if (whyItHelps.isNotEmpty) SizedBox(height: 10.h),
           if (whyItHelps.isNotEmpty)
             Container(
