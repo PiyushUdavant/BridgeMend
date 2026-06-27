@@ -54,7 +54,7 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
     'Conversation',
     'Patterns',
     'Scores',
-    'Next steps',
+    // 'Next steps',
   ];
 
   @override
@@ -340,7 +340,7 @@ class _CallAiAnalysisScreenState extends State<CallAiAnalysisScreen> {
               _buildTranscriptPage(transcript),
               _buildPatternsPage(analysis),
               _buildScoresPage(analysis),
-              _buildNextStepsPage(analysis),
+              // _buildNextStepsPage(analysis),
             ],
           ),
         ),

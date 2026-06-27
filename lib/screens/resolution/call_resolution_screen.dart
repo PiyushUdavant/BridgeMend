@@ -5,7 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/aurora_background.dart';
 import '../../widgets/gradient_button.dart';
 
-class CallResolutionScreen extends StatelessWidget {
+class CallResolutionScreen extends StatefulWidget {
   final Map<String, dynamic> analysis;
   final String? partnerName;
 
@@ -16,27 +16,45 @@ class CallResolutionScreen extends StatelessWidget {
   });
 
   @override
+  State<CallResolutionScreen> createState() => _CallResolutionScreenState();
+}
+
+class _CallResolutionScreenState extends State<CallResolutionScreen> {
+  final PageController _pageController = PageController();
+  int _pageIndex = 0;
+
+  static const _pageTitles = [
+    'Escalators',
+    'Actions',
+    'Shared plan',
+    'Next steps',
+  ];
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final resolutionActions =
-        Map<String, dynamic>.from(analysis['resolutionActions'] as Map? ?? {});
+    final resolutionActions = Map<String, dynamic>.from(
+      widget.analysis['resolutionActions'] as Map? ?? {},
+    );
 
     final conflictEscalators =
         resolutionActions['conflictEscalators'] as List? ?? [];
-
     final partnerActionPlans =
         resolutionActions['partnerActionPlans'] as List? ?? [];
-
     final sharedSolutions =
         resolutionActions['sharedSolutions'] as List? ?? [];
 
-    final immediateRepairScript = Map<String, dynamic>.from(
-      resolutionActions['immediateRepairScript'] as Map? ?? {},
-    );
-
-    final resolutionSteps = _stringList(analysis['resolutionSteps']);
-    final improvementSuggestions = _stringList(analysis['improvementSuggestions']);
-    final bondingActivities = _stringList(analysis['suggestedBondingActivities']);
-    final disclaimer = analysis['disclaimer']?.toString() ?? '';
+    final resolutionSteps =
+        _stringList(widget.analysis['resolutionSteps']);
+    final improvementSuggestions =
+        _stringList(widget.analysis['improvementSuggestions']);
+    final bondingActivities =
+        _stringList(widget.analysis['suggestedBondingActivities']);
 
     return Scaffold(
       body: AuroraBackground(
@@ -44,84 +62,77 @@ class CallResolutionScreen extends StatelessWidget {
         child: SafeArea(
           child: Column(
             children: [
+              // ── Header ──────────────────────────────────────────────────
               _buildHeader(context),
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.fromLTRB(20.w, 8.h, 20.w, 20.h),
-                  children: [
-                    _introCard(),
-                    SizedBox(height: 16.h),
 
-                    if (conflictEscalators.isNotEmpty)
-                      _conflictEscalatorsCard(conflictEscalators),
-
-                    if (conflictEscalators.isNotEmpty) SizedBox(height: 16.h),
-
-                    if (partnerActionPlans.isNotEmpty)
-                      _partnerActionPlansCard(partnerActionPlans),
-
-                    if (partnerActionPlans.isNotEmpty) SizedBox(height: 16.h),
-
-                    if (sharedSolutions.isNotEmpty)
-                      _sharedSolutionsCard(sharedSolutions),
-
-                    if (sharedSolutions.isNotEmpty) SizedBox(height: 16.h),
-
-                    if (immediateRepairScript.isNotEmpty)
-                      _repairScriptCard(immediateRepairScript),
-
-                    if (immediateRepairScript.isNotEmpty) SizedBox(height: 16.h),
-
-                    if (resolutionSteps.isNotEmpty)
-                      _simpleListCard(
-                        title: 'Resolution steps',
-                        icon: Icons.route_rounded,
-                        color: AppTheme.successGreen,
-                        items: resolutionSteps,
-                      ),
-
-                    if (resolutionSteps.isNotEmpty) SizedBox(height: 16.h),
-
-                    if (improvementSuggestions.isNotEmpty)
-                      _simpleListCard(
-                        title: 'Improve together',
-                        icon: Icons.trending_up_rounded,
-                        color: AppTheme.neonBlue,
-                        items: improvementSuggestions,
-                      ),
-
-                    if (improvementSuggestions.isNotEmpty) SizedBox(height: 16.h),
-
-                    if (bondingActivities.isNotEmpty)
-                      _simpleListCard(
-                        title: 'Reconnect gently',
-                        icon: Icons.favorite_border_rounded,
-                        color: AppTheme.partnerBGlow,
-                        items: bondingActivities,
-                      ),
-
-                    if (bondingActivities.isNotEmpty) SizedBox(height: 16.h),
-
-                    if (disclaimer.isNotEmpty)
-                      Text(
-                        disclaimer,
-                        style: TextStyle(
-                          color: AppTheme.textQuaternary,
-                          fontSize: 11.sp,
-                          fontStyle: FontStyle.italic,
-                          height: 1.4,
+              // ── Tab chips ───────────────────────────────────────────────
+              SizedBox(
+                height: 36.h,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: EdgeInsets.symmetric(horizontal: 16.w),
+                  itemCount: _pageTitles.length,
+                  itemBuilder: (context, i) {
+                    final selected = i == _pageIndex;
+                    return Padding(
+                      padding: EdgeInsets.only(right: 8.w),
+                      child: ChoiceChip(
+                        label: Text(_pageTitles[i]),
+                        selected: selected,
+                        onSelected: (_) {
+                          setState(() => _pageIndex = i);
+                          _pageController.animateToPage(
+                            i,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOut,
+                          );
+                        },
+                        selectedColor:
+                            AppTheme.aiActive.withValues(alpha: 0.25),
+                        backgroundColor: AppTheme.backgroundTertiary,
+                        labelStyle: TextStyle(
+                          color: selected
+                              ? AppTheme.aiActive
+                              : AppTheme.textSecondary,
+                          fontSize: 12.sp,
+                        ),
+                        side: BorderSide(
+                          color: selected
+                              ? AppTheme.aiActive
+                              : AppTheme.glassBorder,
                         ),
                       ),
+                    );
+                  },
+                ),
+              ),
 
-                    SizedBox(height: 24.h),
-
-                    GradientButton(
-                      text: 'Back to AI insights',
-                      icon: Icons.arrow_back_rounded,
-                      width: double.infinity,
-                      onPressed: () => Navigator.pop(context),
+              // ── PageView ────────────────────────────────────────────────
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  onPageChanged: (i) => setState(() => _pageIndex = i),
+                  children: [
+                    _buildEscalatorsPage(conflictEscalators),
+                    _buildActionsPage(partnerActionPlans),
+                    _buildSharedPlanPage(sharedSolutions),
+                    _buildNextStepsPage(
+                      resolutionSteps,
+                      improvementSuggestions,
+                      bondingActivities,
                     ),
                   ],
+                ),
+              ),
+
+              // ── Bottom action ────────────────────────────────────────────
+              Padding(
+                padding: EdgeInsets.all(20.w),
+                child: GradientButton(
+                  text: 'Back to AI insights',
+                  icon: Icons.arrow_back_rounded,
+                  width: double.infinity,
+                  onPressed: () => Navigator.pop(context),
                 ),
               ),
             ],
@@ -130,6 +141,104 @@ class CallResolutionScreen extends StatelessWidget {
       ),
     );
   }
+
+  // ── Pages ────────────────────────────────────────────────────────────────
+
+  Widget _buildEscalatorsPage(List conflictEscalators) {
+    return ListView(
+      padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 20.h),
+      children: [
+        if (conflictEscalators.isEmpty)
+          _glassCard(
+            child: Text(
+              'No conflict escalators were identified.',
+              style: _bodyStyle,
+            ),
+          )
+        else
+          _conflictEscalatorsCard(conflictEscalators),
+      ],
+    );
+  }
+
+  Widget _buildActionsPage(List partnerActionPlans) {
+    return ListView(
+      padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 20.h),
+      children: [
+        if (partnerActionPlans.isEmpty)
+          _glassCard(
+            child: Text(
+              'No partner action plans available.',
+              style: _bodyStyle,
+            ),
+          )
+        else
+          _partnerActionPlansCard(partnerActionPlans),
+      ],
+    );
+  }
+
+  Widget _buildSharedPlanPage(List sharedSolutions) {
+    return ListView(
+      padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 20.h),
+      children: [
+        if (sharedSolutions.isEmpty)
+          _glassCard(
+            child: Text(
+              'No shared solutions available.',
+              style: _bodyStyle,
+            ),
+          )
+        else
+          _sharedSolutionsCard(sharedSolutions),
+      ],
+    );
+  }
+
+  Widget _buildNextStepsPage(
+    List<String> resolutionSteps,
+    List<String> improvementSuggestions,
+    List<String> bondingActivities,
+  ) {
+    final isEmpty = resolutionSteps.isEmpty &&
+        improvementSuggestions.isEmpty &&
+        bondingActivities.isEmpty;
+
+    return ListView(
+      padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 20.h),
+      children: [
+        if (isEmpty)
+          _glassCard(
+            child: Text('No next steps available.', style: _bodyStyle),
+          ),
+        if (resolutionSteps.isNotEmpty)
+          _simpleListCard(
+            title: 'Resolution steps',
+            icon: Icons.route_rounded,
+            color: AppTheme.successGreen,
+            items: resolutionSteps,
+          ),
+        if (resolutionSteps.isNotEmpty) SizedBox(height: 16.h),
+        if (improvementSuggestions.isNotEmpty)
+          _simpleListCard(
+            title: 'Improve together',
+            icon: Icons.trending_up_rounded,
+            color: AppTheme.neonBlue,
+            items: improvementSuggestions,
+          ),
+        if (improvementSuggestions.isNotEmpty) SizedBox(height: 16.h),
+        if (bondingActivities.isNotEmpty)
+          _simpleListCard(
+            title: 'Reconnect gently',
+            icon: Icons.favorite_border_rounded,
+            color: AppTheme.partnerBGlow,
+            items: bondingActivities,
+          ),
+      ],
+    );
+  }
+
+  // ── Section cards ────────────────────────────────────────────────────────
 
   Widget _buildHeader(BuildContext context) {
     return Padding(
@@ -186,23 +295,6 @@ class CallResolutionScreen extends StatelessWidget {
     );
   }
 
-  Widget _introCard() {
-    return _glassCard(
-      glowColor: AppTheme.aiActive,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionTitle('What this plan does', Icons.auto_awesome_rounded),
-          SizedBox(height: 10.h),
-          Text(
-            'This section turns your conversation analysis into practical next steps. It highlights what may have escalated the conflict, what each partner can do differently, and how both of you can restart the conversation calmly.',
-            style: _bodyStyle,
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _conflictEscalatorsCard(List items) {
     return _glassCard(
       glowColor: AppTheme.neonCoral,
@@ -225,7 +317,8 @@ class CallResolutionScreen extends StatelessWidget {
           SizedBox(height: 16.h),
           ...items.map((raw) {
             final item = Map<String, dynamic>.from(raw as Map);
-            final partnerName = item['partnerName']?.toString() ?? 'Partner';
+            final partnerName =
+                item['partnerName']?.toString() ?? 'Partner';
             final behavior = item['behavior']?.toString() ?? '';
             final impact = item['impact']?.toString() ?? '';
             final betterAlternative =
@@ -296,7 +389,8 @@ class CallResolutionScreen extends StatelessWidget {
           SizedBox(height: 16.h),
           ...plans.map((raw) {
             final plan = Map<String, dynamic>.from(raw as Map);
-            final partnerName = plan['partnerName']?.toString() ?? 'Partner';
+            final partnerName =
+                plan['partnerName']?.toString() ?? 'Partner';
             final actions = plan['actions'] as List? ?? [];
 
             return Padding(
@@ -307,11 +401,14 @@ class CallResolutionScreen extends StatelessWidget {
                   _miniLabel(partnerName, AppTheme.aiActive),
                   SizedBox(height: 12.h),
                   ...actions.map((rawAction) {
-                    final action = Map<String, dynamic>.from(rawAction as Map);
+                    final action =
+                        Map<String, dynamic>.from(rawAction as Map);
                     return _actionTile(
                       title: action['title']?.toString() ?? 'Action',
-                      description: action['description']?.toString() ?? '',
-                      whyItHelps: action['whyItHelps']?.toString() ?? '',
+                      description:
+                          action['description']?.toString() ?? '',
+                      whyItHelps:
+                          action['whyItHelps']?.toString() ?? '',
                     );
                   }),
                 ],
@@ -350,7 +447,8 @@ class CallResolutionScreen extends StatelessWidget {
               child: Container(
                 padding: EdgeInsets.all(14.w),
                 decoration: BoxDecoration(
-                  color: AppTheme.successGreen.withValues(alpha: 0.08),
+                  color:
+                      AppTheme.successGreen.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(14.r),
                   border: Border.all(
                     color: AppTheme.successGreen.withValues(alpha: 0.25),
@@ -378,7 +476,8 @@ class CallResolutionScreen extends StatelessWidget {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                          if (description.isNotEmpty) SizedBox(height: 6.h),
+                          if (description.isNotEmpty)
+                            SizedBox(height: 6.h),
                           if (description.isNotEmpty)
                             Text(description, style: _bodyStyle),
                         ],
@@ -389,51 +488,6 @@ class CallResolutionScreen extends StatelessWidget {
               ),
             );
           }),
-        ],
-      ),
-    );
-  }
-
-  Widget _repairScriptCard(Map<String, dynamic> scriptData) {
-    final title = scriptData['title']?.toString() ?? 'Try saying this';
-    final script = scriptData['script']?.toString() ?? '';
-
-    return _glassCard(
-      glowColor: AppTheme.partnerBGlow,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionTitle('Try saying this now', Icons.record_voice_over_rounded),
-          SizedBox(height: 12.h),
-          Text(
-            title,
-            style: TextStyle(
-              color: AppTheme.partnerBGlow,
-              fontSize: 15.sp,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: 12.h),
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(14.w),
-            decoration: BoxDecoration(
-              color: AppTheme.partnerBGlow.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(14.r),
-              border: Border.all(
-                color: AppTheme.partnerBGlow.withValues(alpha: 0.25),
-              ),
-            ),
-            child: Text(
-              script.isNotEmpty ? '“$script”' : 'No repair script available.',
-              style: TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 15.sp,
-                height: 1.45,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -457,6 +511,8 @@ class CallResolutionScreen extends StatelessWidget {
       ),
     );
   }
+
+  // ── Shared helpers ───────────────────────────────────────────────────────
 
   Widget _actionTile({
     required String title,
@@ -498,7 +554,8 @@ class CallResolutionScreen extends StatelessWidget {
             ],
           ),
           if (description.isNotEmpty) SizedBox(height: 8.h),
-          if (description.isNotEmpty) Text(description, style: _bodyStyle),
+          if (description.isNotEmpty)
+            Text(description, style: _bodyStyle),
           if (whyItHelps.isNotEmpty) SizedBox(height: 10.h),
           if (whyItHelps.isNotEmpty)
             Container(
@@ -580,10 +637,7 @@ class CallResolutionScreen extends StatelessWidget {
     );
   }
 
-  Widget _glassCard({
-    required Widget child,
-    Color? glowColor,
-  }) {
+  Widget _glassCard({required Widget child, Color? glowColor}) {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(16.w),
@@ -625,15 +679,10 @@ class CallResolutionScreen extends StatelessWidget {
             margin: EdgeInsets.only(top: 6.h),
             width: 6.w,
             height: 6.w,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           SizedBox(width: 10.w),
-          Expanded(
-            child: Text(text, style: _bodyStyle),
-          ),
+          Expanded(child: Text(text, style: _bodyStyle)),
         ],
       ),
     );
