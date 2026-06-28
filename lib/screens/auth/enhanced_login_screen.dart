@@ -14,7 +14,12 @@ import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
 
 class EnhancedLoginScreen extends StatefulWidget {
-  const EnhancedLoginScreen({super.key});
+  final bool showSignedOutMessage;
+
+  const EnhancedLoginScreen({
+    super.key,
+    this.showSignedOutMessage = false,
+  });
 
   @override
   State<EnhancedLoginScreen> createState() => _EnhancedLoginScreenState();
@@ -38,6 +43,36 @@ class _EnhancedLoginScreenState extends State<EnhancedLoginScreen>
   void initState() {
     super.initState();
     _initializeAnimations();
+
+    if (widget.showSignedOutMessage) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                SizedBox(width: 10),
+                Text(
+                  'Signed out successfully',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppTheme.successGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusM),
+            ),
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      });
+    }
   }
 
   void _initializeAnimations() {

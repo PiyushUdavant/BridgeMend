@@ -92,6 +92,13 @@ class FirebaseAppState extends ChangeNotifier {
   int? get pendingCallDurationSeconds => _pendingCallDurationSeconds;
   String? get pendingConflictTopic => _pendingConflictTopic;
 
+  bool _justSignedOut = false;
+  bool get justSignedOut => _justSignedOut;
+
+  void consumeSignedOutFlag() {
+    _justSignedOut = false;
+  }
+
   void setPendingCallAudio({
     required String path,
     int? durationSeconds,
@@ -223,11 +230,26 @@ class FirebaseAppState extends ChangeNotifier {
           debugPrint('🔥 User is Partner B');
         }
         // Load sessions
+        // debugPrint('🔥 Loading sessions...');
+        // _sessions = await _sessionsService.getRelationshipSessions(
+        //   _relationshipData!['id'],
+        // );
+
+        // await LocalSessionService.saveSessions(_sessions);
+
         debugPrint('🔥 Loading sessions...');
+
+        // Serve from Hive cache immediately — no network wait
+        final cached = LocalSessionService.getSessions();
+        if (cached.isNotEmpty) {
+          _sessions = cached;
+          notifyListeners(); // screens show cached data right away
+        }
+
+        // Sync from remote and update the cache
         _sessions = await _sessionsService.getRelationshipSessions(
           _relationshipData!['id'],
         );
-
         await LocalSessionService.saveSessions(_sessions);
         
         // Load active session
@@ -252,7 +274,7 @@ class FirebaseAppState extends ChangeNotifier {
   // Clear user data
   void _clearUserData() {
     debugPrint('🔥 Clearing user data and setting user to null');
-    _user = null; // This is crucial for navigation
+    _user = null; 
     _relationshipData = null;
     _sessions = [];
     _currentSession = null;
@@ -337,10 +359,12 @@ class FirebaseAppState extends ChangeNotifier {
   Future<void> signOut() async {
     try {
       debugPrint('🔥 Starting sign out process...');
+      _justSignedOut = true;  
       await _authService.signOut();
       debugPrint('🔥 Sign out completed successfully');
     } catch (e) {
       debugPrint('🔥 ERROR: Sign out failed: $e');
+      _justSignedOut = false; 
       rethrow;
     }
   }

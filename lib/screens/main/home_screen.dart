@@ -80,10 +80,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               child: _buildHeroHeader(context, appState),
                             ),
                             SizedBox(height: AppTheme.spacingXL.h),
-                            Semantics(
-                              label: 'Quick Grid Stats',
-                              child: _buildQuickStatsGrid(context, appState),
-                            ),
+                            // Semantics(
+                            //   label: 'Quick Grid Stats',
+                            //   child: _buildQuickStatsGrid(context, appState),
+                            // ),
                             SizedBox(height: AppTheme.spacingXL.h),
                             Semantics(
                               label: 'Session CTA',
@@ -116,22 +116,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       titleSpacing: AppTheme.spacingM,
       title: Row(
         children: [
+          Image.asset(
+            'assets/logo_without_name.png',
+            height: 35.h,
+            width: 35.w,
+            fit: BoxFit.contain,
+          ),
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: AppTheme.spacingM,
               vertical: AppTheme.spacingS,
             ),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(AppTheme.radiusL),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-            ),
+            // decoration: BoxDecoration(
+            //   color: Colors.white.withValues(alpha: 0.06),
+            //   borderRadius: BorderRadius.circular(AppTheme.radiusL),
+            //   border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+            // ),
             child: ShaderMask(
               shaderCallback: (bounds) => const LinearGradient(
                 colors: [AppTheme.gradientStart, AppTheme.gradientEnd],
               ).createShader(bounds),
               child: const Text(
-                'Mend',
+                'BridgeMend',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
@@ -141,20 +147,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
+          
+          
         ],
       ),
       actions: [
-        _pillAction(
-          context,
-          icon: Icons.insights_rounded,
-          color: AppTheme.primary,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const InsightsDashboardScreen(),
-            ),
-          ),
-        ),
+        // _pillAction(
+        //   context,
+        //   icon: Icons.insights_rounded,
+        //   color: AppTheme.primary,
+        //   onTap: () => Navigator.push(
+        //     context,
+        //     MaterialPageRoute(
+        //       builder: (context) => const InsightsDashboardScreen(),
+        //     ),
+        //   ),
+        // ),
         const SizedBox(width: AppTheme.spacingS),
         _pillAction(
           context,

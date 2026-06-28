@@ -115,7 +115,7 @@ flutter:
   # Assets
   assets:
     - assets/google_logo.svg
-    - assets/logo.png
+    - assets/logo_without_name.png
     - assets/lottie/glowing_heart.json
     - assets/lottie/ai_orb.json
 
@@ -145,7 +145,7 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
 
-flutter_icons:
+flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/logo.png"
+  image_path: "assets/logo_without_name.png"

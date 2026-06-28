@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:mend_ai/screens/auth/auth_wrapper.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../../providers/firebase_app_state.dart';
@@ -8,6 +9,11 @@ import '../../widgets/animated_card.dart';
 import '../../widgets/gradient_button.dart';
 import '../auth/enhanced_login_screen.dart';
 import '../../widgets/aurora_background.dart';
+import 'privacy_policy_screen.dart';
+import 'terms_of_service_screen.dart';
+import 'help_support_screen.dart';
+import 'app_version_screen.dart';
+import 'rate_app_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -124,7 +130,12 @@ class _SettingsScreenState extends State<SettingsScreen>
             title: 'Privacy Policy',
             subtitle: 'How we handle your data',
             onTap: () {
-              // TODO: Show privacy policy
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const PrivacyPolicyScreen(),
+                ),
+              );
             },
           ),
           const SizedBox(height: AppTheme.spacingM),
@@ -133,18 +144,23 @@ class _SettingsScreenState extends State<SettingsScreen>
             title: 'Terms of Service',
             subtitle: 'App usage terms and conditions',
             onTap: () {
-              // TODO: Show terms of service
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const TermsOfServiceScreen(),
+                ),
+              );
             },
           ),
-          const SizedBox(height: AppTheme.spacingM),
-          _buildSettingsItem(
-            icon: Icons.delete_outline_rounded,
-            title: 'Delete Account',
-            subtitle: 'Permanently remove your data',
-            onTap: () {
-              _showDeleteAccountDialog(context);
-            },
-          ),
+          // const SizedBox(height: AppTheme.spacingM),
+          // _buildSettingsItem(
+          //   icon: Icons.delete_outline_rounded,
+          //   title: 'Delete Account',
+          //   subtitle: 'Permanently remove your data',
+          //   onTap: () {
+          //     _showDeleteAccountDialog(context);
+          //   },
+          // ),
         ],
       ),
     );
@@ -185,25 +201,35 @@ class _SettingsScreenState extends State<SettingsScreen>
             title: 'Help & Support',
             subtitle: 'Get help using Mend',
             onTap: () {
-              // TODO: Help & support
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const HelpSupportScreen(),
+                ),
+              );
             },
           ),
-          const SizedBox(height: AppTheme.spacingM),
-          _buildSettingsItem(
-            icon: Icons.feedback_rounded,
-            title: 'Send Feedback',
-            subtitle: 'Share your thoughts with us',
-            onTap: () {
-              // TODO: Feedback form
-            },
-          ),
+          // const SizedBox(height: AppTheme.spacingM),
+          // _buildSettingsItem(
+          //   icon: Icons.feedback_rounded,
+          //   title: 'Send Feedback',
+          //   subtitle: 'Share your thoughts with us',
+          //   onTap: () {
+          //     // TODO: Feedback form
+          //   },
+          // ),
           const SizedBox(height: AppTheme.spacingM),
           _buildSettingsItem(
             icon: Icons.star_rounded,
             title: 'Rate App',
             subtitle: 'Rate Mend in the App Store',
             onTap: () {
-              // TODO: App store rating
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const RateAppScreen(),
+                ),
+              );
             },
           ),
           const SizedBox(height: AppTheme.spacingM),
@@ -211,7 +237,14 @@ class _SettingsScreenState extends State<SettingsScreen>
             icon: Icons.code_rounded,
             title: 'Version',
             subtitle: '1.0.0',
-            onTap: () {},
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AppVersionScreen(),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -297,7 +330,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   void _showSignOutDialog(BuildContext context, FirebaseAppState appState) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusL),
         ),
@@ -307,18 +340,18 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(ctx);   // close confirmation dialog
 
-              // Show loading indicator
+              // Show loading spinner using the SCREEN's context
               showDialog(
                 context: context,
                 barrierDismissible: false,
-                builder: (context) => const Center(
+                builder: (_) => const Center(
                   child: CircularProgressIndicator(color: AppTheme.primary),
                 ),
               );
@@ -327,40 +360,24 @@ class _SettingsScreenState extends State<SettingsScreen>
                 await appState.signOut();
 
                 if (context.mounted) {
-                  Navigator.pop(context); // Close loading dialog
+                  Navigator.pop(context); // close spinner
 
-                  // Show brief success message
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Signed out successfully'),
-                      backgroundColor: Colors.green,
-                      behavior: SnackBarBehavior.floating,
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-
-                  // Force navigate directly to login screen
-                  Navigator.of(context).pushAndRemoveUntil(
-                    PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) =>
-                          const EnhancedLoginScreen(),
-                      transitionsBuilder:
-                          (context, animation, secondaryAnimation, child) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            );
-                          },
-                      transitionDuration: const Duration(milliseconds: 500),
-                    ),
-                    (route) => false,
-                  );
-
-                  debugPrint('🔥 Navigation to login screen completed');
+                    Navigator.of(context).pushAndRemoveUntil(
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) =>
+                            const AuthWrapper(),
+                        transitionsBuilder:
+                            (context, animation, secondaryAnimation, child) {
+                              return FadeTransition(opacity: animation, child: child);
+                            },
+                        transitionDuration: const Duration(milliseconds: 500),
+                      ),
+                      (route) => false,
+                    );
                 }
               } catch (e) {
                 if (context.mounted) {
-                  Navigator.pop(context); // Close loading dialog
+                  Navigator.pop(context); // close spinner
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Sign out failed: ${e.toString()}'),

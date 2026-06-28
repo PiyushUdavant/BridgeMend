@@ -3091,5 +3091,2476 @@ DATA FLOW AFTER CHANGE
        │  "Start New Session"     → existing flow (unchanged)
 
 ================================================================================
+END OF FILE (SESSION HISTORY SECTION)
+================================================================================
+
+
+================================================================================
+SETTINGS STATIC PAGES — COMPLETE IMPLEMENTATION GUIDE
+================================================================================
+Project: BridgeMend AI (Mend App)
+Files to create/modify: 6 files total
+
+Goal:
+  • Create 5 new screen files for the settings items that currently do nothing.
+  • Modify settings_screen.dart to navigate to each new screen.
+  • Screens: PrivacyPolicyScreen, TermsOfServiceScreen, HelpSupportScreen,
+    AppVersionScreen, RateAppScreen.
+  • All screens match the existing dark glassmorphic design system.
+================================================================================
+
+
+================================================================================
+STEP 1 — CREATE: lib/screens/settings/privacy_policy_screen.dart
+================================================================================
+
+import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/aurora_background.dart';
+
+class PrivacyPolicyScreen extends StatelessWidget {
+  const PrivacyPolicyScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ),
+        title: const Text('Privacy Policy'),
+      ),
+      body: AuroraBackground(
+        intensity: 0.6,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(24.w),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _header(context, 'Last updated: June 2025'),
+                SizedBox(height: 24.h),
+
+                _section(context, 'What We Collect',
+                    Icons.data_usage_rounded, AppTheme.neonBlue, [
+                  _para('Mend collects only what is necessary to provide '
+                      'the service:'),
+                  _bullet('Account information — your name and email address '
+                      'provided during sign-in.'),
+                  _bullet('Session data — voice transcripts generated during '
+                      'communication sessions are processed by our AI and '
+                      'stored to power session insights and history.'),
+                  _bullet('Relationship profile — the partner information and '
+                      'onboarding answers you provide to personalise your '
+                      'experience.'),
+                  _bullet('Usage data — anonymous app interaction data to help '
+                      'us improve the product (no personal content included).'),
+                ]),
+
+                SizedBox(height: 20.h),
+                _section(context, 'How We Use Your Data',
+                    Icons.psychology_rounded, AppTheme.primary, [
+                  _para('Your data is used solely to operate and improve Mend:'),
+                  _bullet('Generate AI-powered session insights and resolution '
+                      'plans personalised to your relationship.'),
+                  _bullet('Display your session history and progress over time.'),
+                  _bullet('Authenticate you securely and maintain your account.'),
+                  _bullet('Improve the AI model\'s accuracy in a privacy-safe '
+                      'way — we never sell or share your personal data.'),
+                ]),
+
+                SizedBox(height: 20.h),
+                _section(context, 'Data Storage & Security',
+                    Icons.lock_rounded, AppTheme.successGreen, [
+                  _para('Your data is stored on secured cloud infrastructure '
+                      '(Supabase) with industry-standard encryption at rest '
+                      'and in transit.'),
+                  _bullet('Voice transcripts are encrypted before storage.'),
+                  _bullet('We do not store raw audio recordings after '
+                      'transcription is complete.'),
+                  _bullet('Access is restricted — only you and your linked '
+                      'partner can view your session data.'),
+                  _bullet('We conduct periodic security reviews to protect '
+                      'your information.'),
+                ]),
+
+                SizedBox(height: 20.h),
+                _section(context, 'Your Rights',
+                    Icons.verified_user_rounded, AppTheme.neonPink, [
+                  _bullet('Access — you can view all your stored data inside '
+                      'the app at any time.'),
+                  _bullet('Deletion — you can permanently delete your account '
+                      'and all associated data from Settings → Delete Account.'),
+                  _bullet('Portability — contact us to request a copy of '
+                      'your data in a portable format.'),
+                  _bullet('Correction — update your profile information '
+                      'directly within the app.'),
+                ]),
+
+                SizedBox(height: 20.h),
+                _section(context, 'Third-Party Services',
+                    Icons.extension_rounded, AppTheme.neonCoral, [
+                  _para('Mend integrates with:'),
+                  _bullet('Google Sign-In — for authentication only. We do not '
+                      'access your Google account data beyond your name and '
+                      'email.'),
+                  _bullet('Supabase — for secure backend storage.'),
+                  _bullet('ZEGO Cloud — for real-time voice communication '
+                      'during sessions.'),
+                  _para('Each third-party service has its own privacy policy '
+                      'governing how they handle data on their end.'),
+                ]),
+
+                SizedBox(height: 20.h),
+                _section(context, 'Contact',
+                    Icons.mail_rounded, AppTheme.aiActive, [
+                  _para('If you have any questions or concerns about how we '
+                      'handle your data, please reach out:'),
+                  _bullet('Email: privacy@mendapp.io'),
+                  _bullet('We aim to respond to all privacy inquiries within '
+                      '72 hours.'),
+                ]),
+
+                SizedBox(height: 32.h),
+                Container(
+                  padding: EdgeInsets.all(16.w),
+                  decoration: BoxDecoration(
+                    color: AppTheme.glassOverlay,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                    border: Border.all(color: AppTheme.glassBorder),
+                  ),
+                  child: Text(
+                    'Mend is designed to supplement — not replace — '
+                    'professional relationship counselling. We are committed '
+                    'to handling your most personal conversations with the '
+                    'highest level of care and discretion.',
+                    style: TextStyle(
+                      color: AppTheme.textTertiary,
+                      fontSize: 12.sp,
+                      height: 1.5,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                SizedBox(height: 24.h),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _header(BuildContext context, String subtitle) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(10.w),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(AppTheme.radiusM),
+              ),
+              child: Icon(
+                Icons.privacy_tip_rounded,
+                color: AppTheme.primary,
+                size: 28.sp,
+              ),
+            ),
+            SizedBox(width: 14.w),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Privacy Policy',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 20.sp,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: AppTheme.textTertiary,
+                    fontSize: 12.sp,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        SizedBox(height: 16.h),
+        Divider(color: AppTheme.glassBorder),
+      ],
+    );
+  }
+
+  Widget _section(
+    BuildContext context,
+    String title,
+    IconData icon,
+    Color color,
+    List<Widget> children,
+  ) {
+    return Container(
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundSecondary,
+        borderRadius: BorderRadius.circular(AppTheme.radiusL),
+        border: Border.all(color: AppTheme.glassBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 18.sp),
+              SizedBox(width: 8.w),
+              Text(
+                title,
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 15.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 12.h),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _para(String text) => Padding(
+        padding: EdgeInsets.only(bottom: 8.h),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 13.sp,
+            height: 1.5,
+          ),
+        ),
+      );
+
+  Widget _bullet(String text) => Padding(
+        padding: EdgeInsets.only(bottom: 6.h),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: EdgeInsets.only(top: 6.h, right: 8.w),
+              child: Container(
+                width: 5.w,
+                height: 5.w,
+                decoration: const BoxDecoration(
+                  color: AppTheme.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 13.sp,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+
+================================================================================
+STEP 2 — CREATE: lib/screens/settings/terms_of_service_screen.dart
+================================================================================
+
+import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/aurora_background.dart';
+
+class TermsOfServiceScreen extends StatelessWidget {
+  const TermsOfServiceScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ),
+        title: const Text('Terms of Service'),
+      ),
+      body: AuroraBackground(
+        intensity: 0.6,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(24.w),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _header(context, 'Effective date: June 2025'),
+                SizedBox(height: 24.h),
+
+                _section(context, '1. Acceptance of Terms',
+                    Icons.handshake_rounded, AppTheme.primary, [
+                  _para('By downloading, installing, or using Mend, you agree '
+                      'to be bound by these Terms of Service. If you do not '
+                      'agree to these terms, please do not use the app.'),
+                  _para('We may update these terms from time to time. '
+                      'Continued use of Mend after changes are posted '
+                      'constitutes acceptance of the revised terms.'),
+                ]),
+
+                SizedBox(height: 16.h),
+                _section(context, '2. About Mend',
+                    Icons.info_rounded, AppTheme.neonBlue, [
+                  _para('Mend is an AI-assisted communication tool designed '
+                      'to help couples and partners improve how they '
+                      'communicate during difficult conversations.'),
+                  _important(
+                    'Mend is not a licensed therapy or medical service. '
+                    'It does not replace professional counselling, '
+                    'psychotherapy, or crisis support. If you are '
+                    'experiencing a mental health emergency, please contact '
+                    'a qualified professional or emergency services.',
+                  ),
+                ]),
+
+                SizedBox(height: 16.h),
+                _section(context, '3. Eligibility',
+                    Icons.person_rounded, AppTheme.neonViolet, [
+                  _bullet('You must be at least 18 years old to use Mend.'),
+                  _bullet('You must have the legal capacity to enter into '
+                      'a binding agreement.'),
+                  _bullet('You must not be located in a jurisdiction where '
+                      'the app is prohibited.'),
+                ]),
+
+                SizedBox(height: 16.h),
+                _section(context, '4. Your Account',
+                    Icons.account_circle_rounded, AppTheme.aiActive, [
+                  _bullet('You are responsible for maintaining the '
+                      'confidentiality of your account credentials.'),
+                  _bullet('You agree to provide accurate information when '
+                      'setting up your account.'),
+                  _bullet('You may not share your account with others or '
+                      'use another person\'s account without permission.'),
+                  _bullet('You are responsible for all activity that occurs '
+                      'under your account.'),
+                ]),
+
+                SizedBox(height: 16.h),
+                _section(context, '5. Acceptable Use',
+                    Icons.rule_rounded, AppTheme.successGreen, [
+                  _para('You agree not to use Mend to:'),
+                  _bullet('Harass, threaten, or harm your partner or '
+                      'any other person.'),
+                  _bullet('Upload or transmit unlawful, harmful, or '
+                      'offensive content.'),
+                  _bullet('Attempt to reverse-engineer, exploit, or '
+                      'interfere with the app or its services.'),
+                  _bullet('Use the app for any commercial purpose without '
+                      'our prior written consent.'),
+                  _bullet('Circumvent security features or access '
+                      'another user\'s data without authorisation.'),
+                ]),
+
+                SizedBox(height: 16.h),
+                _section(context, '6. AI Limitations',
+                    Icons.smart_toy_rounded, AppTheme.neonCoral, [
+                  _para('Mend uses artificial intelligence to analyse '
+                      'conversations and provide guidance. You acknowledge '
+                      'that:'),
+                  _bullet('AI-generated insights are provided for '
+                      'informational purposes only and may not always '
+                      'be accurate or appropriate for your situation.'),
+                  _bullet('The AI does not understand context the way a '
+                      'trained human professional does.'),
+                  _bullet('We are not liable for decisions made based on '
+                      'AI-generated content.'),
+                ]),
+
+                SizedBox(height: 16.h),
+                _section(context, '7. Intellectual Property',
+                    Icons.copyright_rounded, AppTheme.neonPink, [
+                  _para('All content, design, and technology within Mend '
+                      'is the intellectual property of the Mend team and '
+                      'is protected by applicable copyright and trademark law.'),
+                  _para('You retain ownership of the conversation content '
+                      'you generate. By using Mend you grant us a limited, '
+                      'non-exclusive licence to process that content solely '
+                      'to provide the service.'),
+                ]),
+
+                SizedBox(height: 16.h),
+                _section(context, '8. Termination',
+                    Icons.block_rounded, AppTheme.interruptionColor, [
+                  _para('We reserve the right to suspend or terminate your '
+                      'access to Mend at any time for violations of these '
+                      'terms, without prior notice.'),
+                  _para('You may delete your account at any time via '
+                      'Settings → Delete Account.'),
+                ]),
+
+                SizedBox(height: 16.h),
+                _section(context, '9. Contact Us',
+                    Icons.mail_rounded, AppTheme.aiActive, [
+                  _para('For questions about these terms:'),
+                  _bullet('Email: legal@mendapp.io'),
+                ]),
+
+                SizedBox(height: 32.h),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _header(BuildContext context, String subtitle) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(10.w),
+              decoration: BoxDecoration(
+                color: AppTheme.neonBlue.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(AppTheme.radiusM),
+              ),
+              child: Icon(
+                Icons.gavel_rounded,
+                color: AppTheme.neonBlue,
+                size: 28.sp,
+              ),
+            ),
+            SizedBox(width: 14.w),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Terms of Service',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 20.sp,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: AppTheme.textTertiary,
+                    fontSize: 12.sp,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        SizedBox(height: 16.h),
+        Divider(color: AppTheme.glassBorder),
+      ],
+    );
+  }
+
+  Widget _section(
+    BuildContext context,
+    String title,
+    IconData icon,
+    Color color,
+    List<Widget> children,
+  ) {
+    return Container(
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundSecondary,
+        borderRadius: BorderRadius.circular(AppTheme.radiusL),
+        border: Border.all(color: AppTheme.glassBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 18.sp),
+              SizedBox(width: 8.w),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 15.sp,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 12.h),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _para(String text) => Padding(
+        padding: EdgeInsets.only(bottom: 8.h),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 13.sp,
+            height: 1.5,
+          ),
+        ),
+      );
+
+  Widget _bullet(String text) => Padding(
+        padding: EdgeInsets.only(bottom: 6.h),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: EdgeInsets.only(top: 6.h, right: 8.w),
+              child: Container(
+                width: 5.w,
+                height: 5.w,
+                decoration: const BoxDecoration(
+                  color: AppTheme.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 13.sp,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _important(String text) => Container(
+        margin: EdgeInsets.only(top: 4.h),
+        padding: EdgeInsets.all(12.w),
+        decoration: BoxDecoration(
+          color: AppTheme.neonCoral.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(AppTheme.radiusS),
+          border: Border.all(color: AppTheme.neonCoral.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.warning_rounded,
+                color: AppTheme.neonCoral, size: 16.sp),
+            SizedBox(width: 8.w),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 12.sp,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+
+================================================================================
+STEP 3 — CREATE: lib/screens/settings/help_support_screen.dart
+================================================================================
+
+import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/aurora_background.dart';
+
+class HelpSupportScreen extends StatefulWidget {
+  const HelpSupportScreen({super.key});
+
+  @override
+  State<HelpSupportScreen> createState() => _HelpSupportScreenState();
+}
+
+class _HelpSupportScreenState extends State<HelpSupportScreen> {
+  final Map<String, bool> _expanded = {};
+
+  static const _faqs = [
+    (
+      q: 'How does Mend work?',
+      a: 'Mend listens to your conversation in real-time using your device '
+          'microphone and transcribes it with AI. After the session ends, it '
+          'analyses the transcript to identify communication patterns, score '
+          'each partner\'s engagement, and provide a personalised resolution '
+          'plan and reflection prompts.',
+    ),
+    (
+      q: 'Is my conversation private?',
+      a: 'Yes. Audio is processed in real-time for transcription and then '
+          'discarded — we do not store raw audio recordings. The transcript '
+          'and AI analysis are encrypted and stored securely, accessible '
+          'only to you and your linked partner.',
+    ),
+    (
+      q: 'How do I invite my partner?',
+      a: 'From the home screen, tap "Invite Partner" and share the generated '
+          'invite link or code with your partner. Once they accept and join, '
+          'you\'re linked and can start sessions together.',
+    ),
+    (
+      q: 'What does the AI score mean?',
+      a: 'Scores (0–10) reflect communication quality across dimensions like '
+          'empathy, listening, clarity, and respect. They are not judgements '
+          '— they are a starting point for reflection. A lower score simply '
+          'highlights an area to work on together.',
+    ),
+    (
+      q: 'Can I use Mend without my partner?',
+      a: 'You can explore the app and view past sessions solo, but real-time '
+          'session analysis requires both partners to join the same voice room '
+          'via the session code.',
+    ),
+    (
+      q: 'What happens if my partner and I disconnect during a session?',
+      a: 'The session pauses and waits for reconnection. If the connection '
+          'cannot be restored you can end the session manually — the analysis '
+          'will run on the conversation captured up to that point.',
+    ),
+    (
+      q: 'Is Mend a replacement for couples therapy?',
+      a: 'No. Mend is a communication tool, not a licensed therapy service. '
+          'It can complement professional counselling, but we strongly '
+          'encourage you to work with a qualified therapist for deep or '
+          'persistent relationship challenges.',
+    ),
+    (
+      q: 'How do I delete my account?',
+      a: 'Go to Settings → Delete Account. You will be asked to type "DELETE" '
+          'to confirm. This permanently removes your account, all session '
+          'data, and your relationship profile from our servers.',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ),
+        title: const Text('Help & Support'),
+      ),
+      body: AuroraBackground(
+        intensity: 0.6,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(24.w),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Container(
+                  padding: EdgeInsets.all(20.w),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppTheme.primary.withValues(alpha: 0.15),
+                        AppTheme.neonBlue.withValues(alpha: 0.08),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusL),
+                    border: Border.all(
+                        color: AppTheme.primary.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.support_agent_rounded,
+                        color: AppTheme.primary,
+                        size: 36.sp,
+                      ),
+                      SizedBox(width: 14.w),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'How can we help?',
+                              style: TextStyle(
+                                color: AppTheme.textPrimary,
+                                fontSize: 17.sp,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            SizedBox(height: 4.h),
+                            Text(
+                              'Browse frequently asked questions below or '
+                              'reach out directly.',
+                              style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 12.sp,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 24.h),
+
+                // FAQ heading
+                Row(
+                  children: [
+                    Icon(Icons.quiz_rounded,
+                        color: AppTheme.primary, size: 16.sp),
+                    SizedBox(width: 8.w),
+                    Text(
+                      'FREQUENTLY ASKED QUESTIONS',
+                      style: TextStyle(
+                        color: AppTheme.primary,
+                        fontSize: 11.sp,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 12.h),
+
+                // FAQ accordion
+                ...List.generate(_faqs.length, (i) {
+                  final faq = _faqs[i];
+                  final key = faq.q;
+                  final open = _expanded[key] ?? false;
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: 8.h),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      decoration: BoxDecoration(
+                        color: AppTheme.backgroundSecondary,
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.radiusM),
+                        border: Border.all(
+                          color: open
+                              ? AppTheme.primary.withValues(alpha: 0.4)
+                              : AppTheme.glassBorder,
+                        ),
+                      ),
+                      child: InkWell(
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.radiusM),
+                        onTap: () =>
+                            setState(() => _expanded[key] = !open),
+                        child: Padding(
+                          padding: EdgeInsets.all(14.w),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      faq.q,
+                                      style: TextStyle(
+                                        color: open
+                                            ? AppTheme.textPrimary
+                                            : AppTheme.textSecondary,
+                                        fontSize: 13.sp,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: 8.w),
+                                  AnimatedRotation(
+                                    turns: open ? 0.5 : 0,
+                                    duration:
+                                        const Duration(milliseconds: 220),
+                                    child: Icon(
+                                      Icons.keyboard_arrow_down_rounded,
+                                      color: open
+                                          ? AppTheme.primary
+                                          : AppTheme.textTertiary,
+                                      size: 20.sp,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (open) ...[
+                                SizedBox(height: 10.h),
+                                Divider(
+                                    color: AppTheme.glassBorder, height: 1),
+                                SizedBox(height: 10.h),
+                                Text(
+                                  faq.a,
+                                  style: TextStyle(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 13.sp,
+                                    height: 1.55,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+
+                SizedBox(height: 24.h),
+
+                // Contact section
+                Row(
+                  children: [
+                    Icon(Icons.mail_rounded,
+                        color: AppTheme.primary, size: 16.sp),
+                    SizedBox(width: 8.w),
+                    Text(
+                      'STILL NEED HELP?',
+                      style: TextStyle(
+                        color: AppTheme.primary,
+                        fontSize: 11.sp,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 12.h),
+                Container(
+                  padding: EdgeInsets.all(16.w),
+                  decoration: BoxDecoration(
+                    color: AppTheme.backgroundSecondary,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusL),
+                    border: Border.all(color: AppTheme.glassBorder),
+                  ),
+                  child: Column(
+                    children: [
+                      _contactRow(
+                        icon: Icons.email_rounded,
+                        label: 'Email support',
+                        value: 'support@mendapp.io',
+                        color: AppTheme.primary,
+                      ),
+                      SizedBox(height: 12.h),
+                      Divider(color: AppTheme.glassBorder, height: 1),
+                      SizedBox(height: 12.h),
+                      _contactRow(
+                        icon: Icons.schedule_rounded,
+                        label: 'Response time',
+                        value: 'Within 48 hours',
+                        color: AppTheme.neonBlue,
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 32.h),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _contactRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: EdgeInsets.all(8.w),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(AppTheme.radiusS),
+          ),
+          child: Icon(icon, color: color, size: 18.sp),
+        ),
+        SizedBox(width: 12.w),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: AppTheme.textTertiary,
+                fontSize: 11.sp,
+              ),
+            ),
+            Text(
+              value,
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 13.sp,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+
+================================================================================
+STEP 4 — CREATE: lib/screens/settings/app_version_screen.dart
+================================================================================
+
+import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/aurora_background.dart';
+
+class AppVersionScreen extends StatelessWidget {
+  const AppVersionScreen({super.key});
+
+  static const String _appVersion = '1.0.0';
+  static const String _buildNumber = '1';
+  static const String _releaseDate = 'June 2025';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ),
+        title: const Text('Version'),
+      ),
+      body: AuroraBackground(
+        intensity: 0.6,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(24.w),
+            child: Column(
+              children: [
+                SizedBox(height: 16.h),
+
+                // App logo block
+                Container(
+                  padding: EdgeInsets.symmetric(
+                      vertical: 32.h, horizontal: 24.w),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppTheme.primary.withValues(alpha: 0.12),
+                        AppTheme.neonBlue.withValues(alpha: 0.06),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusXL),
+                    border: Border.all(
+                        color: AppTheme.primary.withValues(alpha: 0.25)),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 72.w,
+                        height: 72.w,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [AppTheme.primary, AppTheme.neonBlue],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.radiusL),
+                        ),
+                        child: Icon(
+                          Icons.favorite_rounded,
+                          color: AppTheme.backgroundPrimary,
+                          size: 36.sp,
+                        ),
+                      ),
+                      SizedBox(height: 16.h),
+                      Text(
+                        'Mend',
+                        style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 28.sp,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      SizedBox(height: 4.h),
+                      Text(
+                        'AI-powered relationship communication',
+                        style: TextStyle(
+                          color: AppTheme.textTertiary,
+                          fontSize: 13.sp,
+                        ),
+                      ),
+                      SizedBox(height: 20.h),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 20.w, vertical: 8.h),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.15),
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.radiusXXL),
+                          border: Border.all(
+                              color:
+                                  AppTheme.primary.withValues(alpha: 0.4)),
+                        ),
+                        child: Text(
+                          'Version $_appVersion',
+                          style: TextStyle(
+                            color: AppTheme.primary,
+                            fontSize: 14.sp,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                SizedBox(height: 24.h),
+
+                // Build info
+                _infoCard(context, [
+                  _infoRow('Version', _appVersion, Icons.tag_rounded),
+                  _divider(),
+                  _infoRow('Build', _buildNumber,
+                      Icons.build_circle_rounded),
+                  _divider(),
+                  _infoRow('Released', _releaseDate,
+                      Icons.calendar_today_rounded),
+                  _divider(),
+                  _infoRow('Platform', 'iOS & Android',
+                      Icons.phone_iphone_rounded),
+                ]),
+
+                SizedBox(height: 20.h),
+
+                // Powered by
+                _sectionLabel(context, 'POWERED BY'),
+                SizedBox(height: 12.h),
+                _infoCard(context, [
+                  _techRow('Flutter', 'UI Framework',
+                      Icons.flutter_dash_rounded, AppTheme.neonBlue),
+                  _divider(),
+                  _techRow('Supabase', 'Backend & Storage',
+                      Icons.storage_rounded, AppTheme.successGreen),
+                  _divider(),
+                  _techRow('ZEGO Cloud', 'Real-time Voice',
+                      Icons.mic_rounded, AppTheme.neonViolet),
+                  _divider(),
+                  _techRow('Claude AI', 'Conversation Analysis',
+                      Icons.auto_awesome_rounded, AppTheme.aiActive),
+                ]),
+
+                SizedBox(height: 20.h),
+
+                // Legal
+                _sectionLabel(context, 'LEGAL'),
+                SizedBox(height: 12.h),
+                _infoCard(context, [
+                  _infoRow('Developer', 'Mend Team',
+                      Icons.code_rounded),
+                  _divider(),
+                  _infoRow(
+                      'Copyright', '© 2025 Mend', Icons.copyright_rounded),
+                ]),
+
+                SizedBox(height: 32.h),
+                Text(
+                  'Made with care for couples everywhere.',
+                  style: TextStyle(
+                    color: AppTheme.textTertiary,
+                    fontSize: 12.sp,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+                SizedBox(height: 24.h),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionLabel(BuildContext context, String text) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text,
+        style: TextStyle(
+          color: AppTheme.primary,
+          fontSize: 11.sp,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.0,
+        ),
+      ),
+    );
+  }
+
+  Widget _infoCard(BuildContext context, List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundSecondary,
+        borderRadius: BorderRadius.circular(AppTheme.radiusL),
+        border: Border.all(color: AppTheme.glassBorder),
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _divider() => Divider(
+        color: AppTheme.glassBorder,
+        height: 1,
+        indent: 16,
+        endIndent: 16,
+      );
+
+  Widget _infoRow(String label, String value, IconData icon) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
+      child: Row(
+        children: [
+          Icon(icon, color: AppTheme.textTertiary, size: 18.sp),
+          SizedBox(width: 12.w),
+          Text(
+            label,
+            style: TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 13.sp,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 13.sp,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _techRow(
+      String name, String role, IconData icon, Color color) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(6.w),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppTheme.radiusXS),
+            ),
+            child: Icon(icon, color: color, size: 16.sp),
+          ),
+          SizedBox(width: 12.w),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 13.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                role,
+                style: TextStyle(
+                  color: AppTheme.textTertiary,
+                  fontSize: 11.sp,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+================================================================================
+STEP 5 — CREATE: lib/screens/settings/rate_app_screen.dart
+================================================================================
+
+import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/aurora_background.dart';
+
+class RateAppScreen extends StatefulWidget {
+  const RateAppScreen({super.key});
+
+  @override
+  State<RateAppScreen> createState() => _RateAppScreenState();
+}
+
+class _RateAppScreenState extends State<RateAppScreen>
+    with SingleTickerProviderStateMixin {
+  int _selectedStars = 0;
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.92, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        ),
+        title: const Text('Rate Mend'),
+      ),
+      body: AuroraBackground(
+        intensity: 0.6,
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.all(24.w),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Spacer(),
+
+                // Pulsing store icon
+                ScaleTransition(
+                  scale: _pulseAnimation,
+                  child: Container(
+                    width: 100.w,
+                    height: 100.w,
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        colors: [
+                          AppTheme.primary.withValues(alpha: 0.25),
+                          AppTheme.neonBlue.withValues(alpha: 0.05),
+                        ],
+                      ),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color: AppTheme.primary.withValues(alpha: 0.35),
+                          width: 1.5),
+                    ),
+                    child: Icon(
+                      Icons.star_rounded,
+                      color: AppTheme.primary,
+                      size: 52.sp,
+                    ),
+                  ),
+                ),
+
+                SizedBox(height: 28.h),
+
+                Text(
+                  'Enjoying Mend?',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 24.sp,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 10.h),
+                Text(
+                  'Your rating helps other couples discover Mend\nand helps us make it better.',
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 14.sp,
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+
+                SizedBox(height: 32.h),
+
+                // Star selector (decorative — no store action yet)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (i) {
+                    final filled = i < _selectedStars;
+                    return GestureDetector(
+                      onTap: () =>
+                          setState(() => _selectedStars = i + 1),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 6.w),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          child: Icon(
+                            filled
+                                ? Icons.star_rounded
+                                : Icons.star_outline_rounded,
+                            key: ValueKey(filled),
+                            color: filled
+                                ? AppTheme.neonCoral
+                                : AppTheme.textTertiary,
+                            size: 40.sp,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+
+                SizedBox(height: 36.h),
+
+                // Coming soon banner
+                Container(
+                  padding: EdgeInsets.symmetric(
+                      vertical: 20.h, horizontal: 20.w),
+                  decoration: BoxDecoration(
+                    color: AppTheme.backgroundSecondary,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusL),
+                    border: Border.all(
+                        color: AppTheme.glassBorder),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(8.w),
+                            decoration: BoxDecoration(
+                              color: AppTheme.successGreen
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusS),
+                            ),
+                            child: Icon(
+                              Icons.android_rounded,
+                              color: AppTheme.successGreen,
+                              size: 22.sp,
+                            ),
+                          ),
+                          SizedBox(width: 14.w),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Google Play Store',
+                                  style: TextStyle(
+                                    color: AppTheme.textPrimary,
+                                    fontSize: 14.sp,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                SizedBox(height: 2.h),
+                                Text(
+                                  'Rating will be available on launch',
+                                  style: TextStyle(
+                                    color: AppTheme.textTertiary,
+                                    fontSize: 12.sp,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 10.w, vertical: 5.h),
+                            decoration: BoxDecoration(
+                              color: AppTheme.neonCoral
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusXXL),
+                              border: Border.all(
+                                  color: AppTheme.neonCoral
+                                      .withValues(alpha: 0.4)),
+                            ),
+                            child: Text(
+                              'Coming Soon',
+                              style: TextStyle(
+                                color: AppTheme.neonCoral,
+                                fontSize: 11.sp,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 14.h),
+                      Divider(color: AppTheme.glassBorder, height: 1),
+                      SizedBox(height: 14.h),
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(8.w),
+                            decoration: BoxDecoration(
+                              color: AppTheme.neonBlue
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusS),
+                            ),
+                            child: Icon(
+                              Icons.apple_rounded,
+                              color: AppTheme.neonBlue,
+                              size: 22.sp,
+                            ),
+                          ),
+                          SizedBox(width: 14.w),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Apple App Store',
+                                  style: TextStyle(
+                                    color: AppTheme.textPrimary,
+                                    fontSize: 14.sp,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                SizedBox(height: 2.h),
+                                Text(
+                                  'Rating will be available on launch',
+                                  style: TextStyle(
+                                    color: AppTheme.textTertiary,
+                                    fontSize: 12.sp,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 10.w, vertical: 5.h),
+                            decoration: BoxDecoration(
+                              color: AppTheme.neonCoral
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusXXL),
+                              border: Border.all(
+                                  color: AppTheme.neonCoral
+                                      .withValues(alpha: 0.4)),
+                            ),
+                            child: Text(
+                              'Coming Soon',
+                              style: TextStyle(
+                                color: AppTheme.neonCoral,
+                                fontSize: 11.sp,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const Spacer(),
+
+                Text(
+                  'We\'ll notify you when Mend is available\nin the app stores.',
+                  style: TextStyle(
+                    color: AppTheme.textTertiary,
+                    fontSize: 12.sp,
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 16.h),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+================================================================================
+STEP 6 — MODIFY: lib/screens/settings/settings_screen.dart (2 CHANGES ONLY)
+================================================================================
+PURPOSE: Add imports for all 5 new screens and wire up Navigator.push in the
+         4 onTap callbacks that currently have // TODO comments, plus Version.
+================================================================================
+
+
+--- CHANGE A: Add 5 imports at the top of settings_screen.dart ---
+
+Add these lines alongside the existing imports:
+
+  import 'privacy_policy_screen.dart';
+  import 'terms_of_service_screen.dart';
+  import 'help_support_screen.dart';
+  import 'app_version_screen.dart';
+  import 'rate_app_screen.dart';
+
+
+--- CHANGE B: Replace the 5 onTap callbacks ---
+
+Find (Privacy Policy onTap):
+          onTap: () {
+              // TODO: Show privacy policy
+            },
+
+REPLACE with:
+          onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const PrivacyPolicyScreen(),
+                ),
+              );
+            },
+
+
+Find (Terms of Service onTap):
+          onTap: () {
+              // TODO: Show terms of service
+            },
+
+REPLACE with:
+          onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const TermsOfServiceScreen(),
+                ),
+              );
+            },
+
+
+Find (Help & Support onTap):
+          onTap: () {
+              // TODO: Help & support
+            },
+
+REPLACE with:
+          onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const HelpSupportScreen(),
+                ),
+              );
+            },
+
+
+Find (Rate App onTap):
+          onTap: () {
+              // TODO: App store rating
+            },
+
+REPLACE with:
+          onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const RateAppScreen(),
+                ),
+              );
+            },
+
+
+Find (Version onTap — currently empty):
+          onTap: () {},
+
+REPLACE with:
+          onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AppVersionScreen(),
+                ),
+              );
+            },
+
+
+================================================================================
+SUMMARY — FILES TOUCHED
+================================================================================
+
+  FILE                                                       ACTION
+  ─────────────────────────────────────────────────────────────────────────────
+  lib/screens/settings/privacy_policy_screen.dart            CREATE (new)
+  lib/screens/settings/terms_of_service_screen.dart          CREATE (new)
+  lib/screens/settings/help_support_screen.dart              CREATE (new)
+  lib/screens/settings/app_version_screen.dart               CREATE (new)
+  lib/screens/settings/rate_app_screen.dart                  CREATE (new)
+  lib/screens/settings/settings_screen.dart                  ADD 5 imports
+                                                              REPLACE 5 onTap
+
+  No pubspec changes needed — all dependencies already present.
+  No backend changes needed — all screens are purely local/static content.
+
+
+================================================================================
+DATA FLOW
+================================================================================
+
+  Settings screen
+       │  Tap "Privacy Policy"     → PrivacyPolicyScreen    (static content)
+       │  Tap "Terms of Service"   → TermsOfServiceScreen   (static content)
+       │  Tap "Help & Support"     → HelpSupportScreen      (FAQ accordion +
+       │                                                      contact info)
+       │  Tap "Rate App"           → RateAppScreen          (coming soon UI +
+       │                                                      interactive stars)
+       │  Tap "Version"            → AppVersionScreen       (version/build/
+       │                                                      tech stack info)
+
+================================================================================
+END OF FILE (SETTINGS PAGES SECTION)
+================================================================================
+
+
+================================================================================
+SIMPLIFY POST-RESOLUTION FLOW — COMPLETE GUIDE
+================================================================================
+Project: BridgeMend AI (Mend App)
+File to modify: lib/screens/resolution/post_resolution_screen.dart
+================================================================================
+
+GOAL:
+  • Remove the 4-step reflection flow (Gratitude, Reflection, Bonding Activities,
+    Summary pages) — these fed the Insights Dashboard which has been removed.
+  • The initial "Session Complete!" dialog becomes the ONLY screen users see.
+  • Change the dialog button from "Continue" to "Complete Session".
+  • Clicking "Complete Session" ends the session and navigates to HomeScreen.
+  • The PostResolutionScreen body becomes a minimal placeholder (invisible behind
+    the dialog) — just AuroraBackground + confetti overlay.
+
+CURRENT FLOW:
+  CallResolutionScreen → PostResolutionScreen
+       │  _showCelebration() dialog: "Session Complete!" + "Continue" button
+       │  Continue → dismisses dialog → 4-page PageView
+       │       Page 1: Gratitude
+       │       Page 2: Reflection
+       │       Page 3: Bonding Activities
+       │       Page 4: Summary  → "Complete Session" → _completeFlow() → Home
+
+NEW FLOW:
+  CallResolutionScreen → PostResolutionScreen
+       │  _showCelebration() dialog: "Session Complete!" + "Complete Session" button
+       │  Complete Session → _completeFlow() → HomeScreen
+
+FILES TOUCHED:
+  lib/screens/resolution/post_resolution_screen.dart   multiple targeted edits
+  (no other files need to change)
+================================================================================
+
+
+--------------------------------------------------------------------------------
+CHANGE 1 — Update the dialog button in _showCelebration()
+--------------------------------------------------------------------------------
+This is the ONLY dialog shown. Change it so clicking the button ends the session
+instead of opening the 4-step flow.
+
+Find this block inside _showCelebration() (around line 248):
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: GradientButton(
+                        text: 'Continue',
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _startFlowAnimations();
+                        },
+                        height: 56.h,
+                      ),
+                    ),
+
+REPLACE with:
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: GradientButton(
+                        text: 'Complete Session',
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _completeFlow();
+                        },
+                        height: 56.h,
+                      ),
+                    ),
+
+
+--------------------------------------------------------------------------------
+CHANGE 2 — Simplify _completeFlow()
+--------------------------------------------------------------------------------
+Remove the _saveToInsights check — we are no longer collecting reflection text,
+so we always call endCommunicationSession with default values.
+
+Find the entire _completeFlow() method (around line 286):
+
+  Future<void> _completeFlow() async {
+    final appState = context.read<FirebaseAppState>();
+
+    // Use passed parameters as fallback if app state is null
+    final sessionId = widget.sessionId ?? appState.currentSession?.id;
+    final currentUserId = widget.currentUserId ?? appState.currentUserId;
+    final partnerName = widget.partnerName ?? appState.getOtherPartner()?.name;
+
+    debugPrint(
+      'Post-resolution flow - Session: $sessionId, User: $currentUserId, Partner: $partnerName',
+    );
+    debugPrint(
+      'Widget params - SessionId: ${widget.sessionId}, UserId: ${widget.currentUserId}, Partner: ${widget.partnerName}',
+    );
+
+    // Save user responses to the session if enabled
+    if (_saveToInsights) {
+      final sessionReflection = {
+        'gratitude': _gratitudeResponse,
+        'reflection': _reflectionResponse,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      // End the session with the user's reflection data
+      await appState.endCommunicationSession(
+        reflection: sessionReflection.toString(),
+        suggestedActivities: [
+          'Take a mindful walk together',
+          'Cook a favorite meal together',
+          'Share three things you\'re grateful for',
+          'Plan your next date night',
+          'Write each other a short note',
+        ],
+      );
+    }
+
+    // Session completed - navigate to home screen
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        (route) => false,
+      );
+    }
+  }
+
+REPLACE with:
+
+  Future<void> _completeFlow() async {
+    final appState = context.read<FirebaseAppState>();
+
+    await appState.endCommunicationSession(
+      reflection: '',
+      suggestedActivities: [],
+    );
+
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        (route) => false,
+      );
+    }
+  }
+
+
+--------------------------------------------------------------------------------
+CHANGE 3 — Simplify the build() method body
+--------------------------------------------------------------------------------
+Replace the complex body (progress card + PageView + nav card) with a single
+minimal container. The dialog floats above this and is what the user actually sees.
+
+Find the entire body: section inside the Scaffold (lines ~382–514):
+
+                body: AuroraBackground(
+                  intensity: 0.6,
+                  child: SafeArea(
+                    child: Column(
+                      children: [
+                        // Progress indicator card
+                        Container(
+                          margin: const EdgeInsets.all(AppTheme.spacingL),
+                          padding: const EdgeInsets.all(AppTheme.spacingM),
+                          decoration: BoxDecoration(
+                            color: AppTheme.surface,
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusL,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Step ${_currentPage + 1} of 4',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          color: AppTheme.textPrimary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppTheme.spacingM,
+                                      vertical: AppTheme.spacingS,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.successGreen.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(
+                                        AppTheme.radiusS,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '${((_currentPage + 1) / 4 * 100).round()}%',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: AppTheme.successGreen,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: AppTheme.spacingM),
+                              LinearProgressIndicator(
+                                value: (_currentPage + 1) / 4,
+                                backgroundColor: AppTheme.borderColor,
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  AppTheme.successGreen,
+                                ),
+                                borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusS,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Page content
+                        Expanded(
+                          child: PageView(
+                            controller: _pageController,
+                            onPageChanged: (index) {
+                              setState(() {
+                                _currentPage = index;
+                              });
+                            },
+                            children: [
+                              _buildGratitudePage(
+                                currentPartner?.name ?? 'You',
+                                otherPartner?.name ?? 'Your Partner',
+                              ),
+                              _buildReflectionPage(),
+                              _buildBondingActivitiesPage(),
+                              _buildSummaryPage(),
+                            ],
+                          ),
+                        ),
+
+                        // Navigation
+                        Container(
+                          margin: const EdgeInsets.all(AppTheme.spacingL),
+                          padding: const EdgeInsets.all(AppTheme.spacingM),
+                          decoration: BoxDecoration(
+                            color: AppTheme.surface,
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusL,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: GradientButton(
+                              text: _currentPage == 3
+                                  ? 'Complete Session'
+                                  : 'Continue',
+                              onPressed: _nextPage,
+                              height: 56,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+REPLACE with:
+
+                body: AuroraBackground(
+                  intensity: 0.6,
+                  child: const SizedBox.expand(),
+                ),
+
+
+--------------------------------------------------------------------------------
+CHANGE 4 — Remove unused state variables
+--------------------------------------------------------------------------------
+Find these 4 declarations at the top of _PostResolutionScreenState (around line 40):
+
+  int _currentPage = 0;
+  String _gratitudeResponse = '';
+  String _reflectionResponse = '';
+  bool _saveToInsights = true;
+
+DELETE all 4 lines.
+
+
+--------------------------------------------------------------------------------
+CHANGE 5 — Remove PageController field and initialization
+--------------------------------------------------------------------------------
+
+Find this field declaration (line 30):
+
+  final PageController _pageController = PageController();
+
+DELETE that line.
+
+Find this in dispose() (around line 1543):
+
+    _pageController.dispose();
+
+DELETE that line.
+
+
+--------------------------------------------------------------------------------
+CHANGE 6 — Remove unused animation controller (_heartAnimationController)
+--------------------------------------------------------------------------------
+The heart animation block is commented out in the dialog, so the controller
+is no longer needed.
+
+Find this field declaration (line 32):
+
+  late AnimationController _heartAnimationController;
+
+DELETE it.
+
+Find this field declaration (line 35):
+
+  late Animation<double> _heartAnimation;
+
+DELETE it.
+
+Find this block in _setupAnimations() (around line 58):
+
+    _heartAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    );
+
+DELETE those 4 lines.
+
+Find this block in _setupAnimations() (around line 74):
+
+    _heartAnimation = Tween<double>(begin: 0.8, end: 1.2).animate(
+      CurvedAnimation(
+        parent: _heartAnimationController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+DELETE those 6 lines.
+
+Find this line in _showCelebration() (around line 92):
+
+    _heartAnimationController.repeat(reverse: true);
+
+DELETE that line.
+
+Find this line in dispose() (around line 1545):
+
+    _heartAnimationController.dispose();
+
+DELETE that line.
+
+
+--------------------------------------------------------------------------------
+CHANGE 7 — Remove _nextPage() and _startFlowAnimations() methods
+--------------------------------------------------------------------------------
+Neither method is called anymore.
+
+Find and DELETE the entire _nextPage() method (around line 275):
+
+  void _nextPage() {
+    if (_currentPage < 3) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      _completeFlow();
+    }
+  }
+
+Find and DELETE the entire _startFlowAnimations() method (around line 269):
+
+  void _startFlowAnimations() {
+    _heartAnimationController.stop();
+    _sparkleController.reset();
+    _fadeController.reset();
+  }
+
+
+--------------------------------------------------------------------------------
+CHANGE 8 — Remove all 4 page-builder methods and their helpers
+--------------------------------------------------------------------------------
+Delete the following methods entirely (they are only used by the removed PageView):
+
+  _buildGratitudePage()          — around line 538
+  _buildPersonalGratitudeSection() — around line 645
+  _buildReflectionPage()         — around line 746
+  _buildReflectionCard()         — around line 896
+  _buildPersonalReflectionInput() — around line 936
+  _buildBondingActivitiesPage()  — around line 1040
+  _buildSummaryPage()            — around line 1308
+  _buildNextStepCard()           — around line 1495
+
+TIP: Delete from the bottom up to avoid line-number shifts confusing you.
+     Start with _buildNextStepCard, then _buildSummaryPage, etc.
+
+
+--------------------------------------------------------------------------------
+CHANGE 9 — Remove unused Consumer variables in build()
+--------------------------------------------------------------------------------
+After removing the PageView, `currentPartner` and `otherPartner` are no longer
+used anywhere in the build method. The Consumer is still needed for PopScope's
+dialog (which uses HomeScreen navigation), but the local variables can go.
+
+Find these 2 lines inside the Consumer builder (around line 336):
+
+        final currentPartner = appState.getCurrentPartner();
+        final otherPartner = appState.getOtherPartner();
+
+DELETE both lines.
+
+NOTE: The `appState` parameter in the Consumer builder signature can remain —
+it does no harm even if unused, and keeps the Consumer pattern intact.
+
+
+================================================================================
+FINAL STATE — What PostResolutionScreen looks like after all changes
+================================================================================
+
+Fields remaining:
+  _sparkleController        (AnimationController — used for SparklesPainter)
+  _fadeController           (AnimationController — used for FadeTransition)
+  _sparkleAnimation         (Animation<double> — used in dialog)
+  _fadeAnimation            (Animation<double> — used in dialog)
+  _confettiController       (ConfettiController — used for confetti overlay)
+
+Methods remaining:
+  initState()               (unchanged)
+  _setupAnimations()        (shortened — no heart controller)
+  _showCelebration()        (button changed to "Complete Session" → _completeFlow)
+  _completeFlow()           (simplified — no reflection data)
+  build()                   (minimal body — dialog + confetti overlay only)
+  dispose()                 (shortened — no heart or page controllers)
+  SparklesPainter           (unchanged — still used in dialog)
+
+
+================================================================================
+DATA FLOW AFTER CHANGE
+================================================================================
+
+  CallResolutionScreen
+       │  "Continue to reflection" button
+       ▼
+  PostResolutionScreen (body = invisible AuroraBackground)
+       │  initState → _showCelebration() dialog appears immediately
+       │
+  Dialog: "Session Complete!" icon + text + "Complete Session" button
+       │
+       │  User taps "Complete Session"
+       ▼
+  _completeFlow()
+       │  appState.endCommunicationSession() — saves to Supabase + Hive
+       │  Navigator.pushAndRemoveUntil → HomeScreen
+
+
+================================================================================
+SIGN-OUT SNACKBAR FIX — STEP-BY-STEP GUIDE
+================================================================================
+Goal:
+  After sign out, show a themed "Signed out successfully" snackbar on the
+  EnhancedLoginScreen (not on the settings screen, which is destroyed by
+  pushAndRemoveUntil before the snackbar can render).
+
+ROOT CAUSE OF THE CURRENT BUG:
+  The existing code in _showSignOutDialog() does:
+    1. ScaffoldMessenger.of(context).showSnackBar(...)   <- shown on Settings scaffold
+    2. Navigator.of(context).pushAndRemoveUntil(...)     <- destroys Settings scaffold
+  Step 2 removes the Settings screen from the tree immediately, which also
+  dismisses any snackbar attached to its ScaffoldMessenger. The snackbar never
+  renders. Fix: show it on the LOGIN screen AFTER navigation.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+STEP 1 — enhanced_login_screen.dart: add showSignedOutMessage parameter
+--------------------------------------------------------------------------------
+Find the class declaration (around line 15):
+
+  class EnhancedLoginScreen extends StatefulWidget {
+    const EnhancedLoginScreen({super.key});
+
+REPLACE with:
+
+  class EnhancedLoginScreen extends StatefulWidget {
+    final bool showSignedOutMessage;
+
+    const EnhancedLoginScreen({
+      super.key,
+      this.showSignedOutMessage = false,
+    });
+
+
+--------------------------------------------------------------------------------
+STEP 2 — enhanced_login_screen.dart: show snackbar after first frame
+--------------------------------------------------------------------------------
+Find initState() inside _EnhancedLoginScreenState. It likely looks like:
+
+  @override
+  void initState() {
+    super.initState();
+    // ... any existing init code ...
+  }
+
+ADD this block inside initState(), AFTER super.initState() and any existing code:
+
+    if (widget.showSignedOutMessage) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                SizedBox(width: 10),
+                Text(
+                  'Signed out successfully',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppTheme.successGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusM),
+            ),
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      });
+    }
+
+NOTE: AppTheme.successGreen matches the success states used throughout the app.
+
+
+--------------------------------------------------------------------------------
+STEP 3 — settings_screen.dart: remove the stale snackbar, pass flag instead
+--------------------------------------------------------------------------------
+Inside _showSignOutDialog(), find the success try-block (around line 355).
+You will see this sequence — the snackbar call before pushAndRemoveUntil:
+
+                  // Show brief success message
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Signed out successfully'),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+
+                  // Force navigate directly to login screen
+                  Navigator.of(context).pushAndRemoveUntil(
+                    PageRouteBuilder(
+                      pageBuilder: (context, animation, secondaryAnimation) =>
+                          const EnhancedLoginScreen(),
+
+DELETE the entire ScaffoldMessenger.showSnackBar(...) block above.
+
+Then change the EnhancedLoginScreen constructor in pushAndRemoveUntil from:
+
+                          const EnhancedLoginScreen(),
+
+TO:
+
+                          const EnhancedLoginScreen(showSignedOutMessage: true),
+
+That's the only two changes in settings_screen.dart.
+
+
+================================================================================
+SUMMARY — FILES TOUCHED
+================================================================================
+
+  FILE                                              CHANGES
+  ─────────────────────────────────────────────────────────────────────────────
+  lib/screens/auth/enhanced_login_screen.dart   Add showSignedOutMessage param,
+                                                show themed snackbar in initState
+                                                via addPostFrameCallback
+  lib/screens/settings/settings_screen.dart     Remove snackbar call before
+                                                pushAndRemoveUntil, pass
+                                                showSignedOutMessage: true to
+                                                EnhancedLoginScreen
+
+================================================================================
+DATA FLOW AFTER CHANGE
+================================================================================
+
+  User taps "Sign Out" → confirms dialog
+       |
+       v
+  Loading spinner shown
+       |
+       v
+  appState.signOut() clears auth state
+       |
+       v
+  Navigator.pop() closes spinner
+       |
+       v
+  pushAndRemoveUntil -> EnhancedLoginScreen(showSignedOutMessage: true)
+       | (Settings screen + all prior routes removed from stack)
+       |
+       v
+  EnhancedLoginScreen.initState()
+       | addPostFrameCallback fires after first frame renders
+       |
+       v
+  ScaffoldMessenger shows "Signed out successfully" snackbar
+  on the LOGIN screen's own scaffold — green, floating, rounded
+
+================================================================================
+FIX: SIGN OUT NOT NAVIGATING TO LOGIN SCREEN (settings_screen.dart)
+================================================================================
+File:  lib/screens/settings/settings_screen.dart
+Method: _showSignOutDialog()
+================================================================================
+
+ROOT CAUSE — Context Shadowing
+────────────────────────────────────────────────────────────────────────────────
+Inside _showSignOutDialog(), the outer showDialog call writes:
+
+  builder: (context) => AlertDialog(...)
+
+The parameter name "context" shadows the method's own BuildContext context.
+From this point on, every reference to "context" inside the builder — including
+inside the TextButton's onPressed callback — refers to the DIALOG's context,
+NOT the SettingsScreen's context.
+
+What happens step by step:
+
+  1. User taps "Sign Out" → confirmation AlertDialog opens.
+     builder captures: context = dialog's BuildContext
+
+  2. User taps "Sign Out" button inside dialog:
+       Navigator.pop(context)   <- pops the dialog using dialog's context OK
+       (dialog is now dismissed; that dialog context is UNMOUNTED)
+
+  3. showDialog for spinner is called:
+       showDialog(context: context, ...)
+       "context" here is still the dialog's context, which is now unmounted.
+       Flutter may silently fail or show the spinner on a stale route.
+
+  4. await appState.signOut()  <- completes successfully
+
+  5. if (context.mounted)  <- evaluates to FALSE because dialog context
+                              was unmounted in step 2.
+
+  6. Navigation code NEVER runs. The spinner (if it appeared) stays on screen.
+     User has to press the hardware/OS back button to dismiss it.
+
+THIS IS WHY the circular progress indicator shows but never goes away and the
+user has to press the back button to see the login screen.
+
+
+THE FIX — One line change: rename the dialog builder parameter
+────────────────────────────────────────────────────────────────────────────────
+In _showSignOutDialog(), change:
+
+  BEFORE:
+    builder: (context) => AlertDialog(
+
+  AFTER:
+    builder: (ctx) => AlertDialog(
+
+Then inside the builder, use "ctx" wherever you mean the DIALOG's context
+(i.e. for Navigator.pop that closes the dialog), and keep using "context"
+(the method parameter) for the spinner, signOut, and navigation.
+
+
+FULL REPLACEMENT for _showSignOutDialog()
+────────────────────────────────────────────────────────────────────────────────
+Replace the entire method with:
+
+  void _showSignOutDialog(BuildContext context, FirebaseAppState appState) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusL),
+        ),
+        title: const Text('Sign Out'),
+        content: const Text(
+          'Are you sure you want to sign out? You\'ll need to sign in again to access your sessions.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);   // close confirmation dialog
+
+              // Show loading spinner using the SCREEN's context
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const Center(
+                  child: CircularProgressIndicator(color: AppTheme.primary),
+                ),
+              );
+
+              try {
+                await appState.signOut();
+
+                if (context.mounted) {
+                  Navigator.pop(context); // close spinner
+
+                  Navigator.of(context).pushAndRemoveUntil(
+                    PageRouteBuilder(
+                      pageBuilder: (context, animation, secondaryAnimation) =>
+                          const EnhancedLoginScreen(showSignedOutMessage: true),
+                      transitionsBuilder:
+                          (context, animation, secondaryAnimation, child) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
+                      transitionDuration: const Duration(milliseconds: 500),
+                    ),
+                    (route) => false,
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  Navigator.pop(context); // close spinner
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Sign out failed: ${e.toString()}'),
+                      backgroundColor: AppTheme.interruptionColor,
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 5),
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text(
+              'Sign Out',
+              style: TextStyle(color: AppTheme.interruptionColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+SUMMARY OF CHANGE
+────────────────────────────────────────────────────────────────────────────────
+  Line changed:   builder: (context) =>   ->   builder: (ctx) =>
+  Inner pops:     Navigator.pop(context)  ->   Navigator.pop(ctx)
+  Everything else (spinner, signOut, navigation) stays on the SCREEN context.
+
+After this change:
+  - context.mounted after signOut() checks the SettingsScreen context  OK
+  - Navigator.of(context).pushAndRemoveUntil() runs on the screen navigator  OK
+  - User is taken directly to EnhancedLoginScreen with no back-button needed  OK
+
+================================================================================
 END OF FILE
 ================================================================================

@@ -10,6 +10,7 @@ import '../../services/zego_voice_service.dart';
 import '../../services/zego_token_service.dart';
 import '../../theme/app_theme.dart';
 import '../resolution/user_scoring_screen.dart';
+import '../main/home_screen.dart';
 import '../../widgets/mood_checkin_dialog.dart';
 import '../../widgets/aurora_background.dart';
 
@@ -457,7 +458,7 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
   }
 
   void _endSession() async {
-    final result = await showDialog<bool>(
+    final result = await showDialog<String?>(
       context: context,
       builder: (context) => AlertDialog(
         title: Row(
@@ -514,11 +515,11 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(context).pop(null),
             child: const Text('Continue Talking'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(context).pop('end'),
             style: TextButton.styleFrom(
               backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
             ),
@@ -530,12 +531,80 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
               ),
             ),
           ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('skip'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppTheme.textTertiary,
+            ),
+            child: const Text('Leave'),
+          ),
         ],
       ),
     );
 
-    if (result == true && mounted) {
-      // Capture session info BEFORE ending ZEGO session
+    // if (result == true && mounted) {
+    //   // Capture session info BEFORE ending ZEGO session
+    //   final appState = context.read<FirebaseAppState>();
+    //   final sessionId = appState.currentSession?.id;
+    //   final currentUserId = appState.currentUserId;
+    //   final otherPartner = appState.getOtherPartner();
+    //   developer.log(
+    //     'Voice chat end: sessionId=$sessionId currentUserId=$currentUserId '
+    //     'otherPartner=${otherPartner?.name} (${otherPartner?.id})',
+    //   );
+
+    //   // Store session data in app state for navigation
+    //   final raterId = appState.getRaterId() ?? currentUserId;
+    //   final ratedPartnerId =
+    //       appState.getRatedPartnerId() ?? otherPartner?.id;
+
+    //   final myPartner = appState.getCurrentPartner();
+
+    //   appState.setTemporarySessionData(
+    //     sessionId: sessionId,
+    //     currentUserId: raterId,
+    //     partnerId: ratedPartnerId ?? (raterId == 'A' ? 'B' : 'A'),
+    //     partnerName:
+    //         otherPartner?.name ?? _zegoService.partnerName ?? 'Partner',
+    //     partnerGender: otherPartner?.gender ?? '',
+    //     selfDisplayName: myPartner?.name,
+    //     selfGender: myPartner?.gender,
+    //   );
+
+    //   final audioFile = await _callRecorder.stop();
+    //   if (audioFile != null) {
+    //     appState.setPendingCallAudio(
+    //       path: audioFile.path,
+    //       durationSeconds: _sessionMinutes * 60 + _sessionSeconds,
+    //       conflictTopic: _currentTherapyCategory,
+    //     );
+    //   }
+
+    //   await _zegoService.endSession();
+
+    //   // Navigate to partner rating (AI analysis runs after rating)
+    //   if (mounted) {
+    //     developer.log(
+    //       'Navigate to UserScoringScreen sessionId=$sessionId '
+    //       'currentUserId=$currentUserId partner=${otherPartner?.name}',
+    //     );
+
+    //     Navigator.pushReplacement(
+    //       context,
+    //       MaterialPageRoute(
+    //         builder: (context) => UserScoringScreen(
+    //           sessionId: sessionId,
+    //           currentUserId: currentUserId,
+    //           partnerName: otherPartner?.name,
+    //           partnerId: otherPartner?.id,
+    //         ),
+    //       ),
+    //     );
+    //   }
+    // }
+
+    if (result == 'end' && mounted) {
+    // --- EXISTING FLOW (unchanged) ---
       final appState = context.read<FirebaseAppState>();
       final sessionId = appState.currentSession?.id;
       final currentUserId = appState.currentUserId;
@@ -545,11 +614,9 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
         'otherPartner=${otherPartner?.name} (${otherPartner?.id})',
       );
 
-      // Store session data in app state for navigation
       final raterId = appState.getRaterId() ?? currentUserId;
       final ratedPartnerId =
           appState.getRatedPartnerId() ?? otherPartner?.id;
-
       final myPartner = appState.getCurrentPartner();
 
       appState.setTemporarySessionData(
@@ -574,13 +641,11 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
 
       await _zegoService.endSession();
 
-      // Navigate to partner rating (AI analysis runs after rating)
       if (mounted) {
         developer.log(
           'Navigate to UserScoringScreen sessionId=$sessionId '
           'currentUserId=$currentUserId partner=${otherPartner?.name}',
         );
-
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -593,7 +658,159 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
           ),
         );
       }
+
+    } else if (result == 'skip' && mounted) {
+      // --- NEW FLOW: leave without insights ---
+      final confirmed = await _confirmLeaveWithoutInsights();
+      if (confirmed == true && mounted) {
+        // Stop recorder and discard the audio file — we won't analyze it
+        final audioFile = await _callRecorder.stop();
+        audioFile?.delete();
+
+        // End ZEGO session cleanly
+        await _zegoService.endSession();
+
+        // Navigate home, remove all routes so back button doesn't return to call
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const HomeScreen(),
+            ),
+            (route) => false,
+          );
+        }
+      }
+      // If not confirmed: user pressed "Go back" — bottom sheet closed, call continues
     }
+  }
+
+  Future<bool?> _confirmLeaveWithoutInsights() {
+    return showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Container(
+          decoration: BoxDecoration(
+            color: AppTheme.backgroundSecondary,
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(24.r),
+            ),
+            border: Border(
+              top: BorderSide(
+                color: AppTheme.glassBorder,
+                width: 1,
+              ),
+            ),
+          ),
+          padding: EdgeInsets.fromLTRB(24.w, 16.h, 24.w, 32.h),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag handle
+              Container(
+                width: 40.w,
+                height: 4.h,
+                decoration: BoxDecoration(
+                  color: AppTheme.textQuaternary,
+                  borderRadius: BorderRadius.circular(2.r),
+                ),
+              ),
+              SizedBox(height: 24.h),
+
+              // Warning icon
+              Container(
+                width: 56.w,
+                height: 56.w,
+                decoration: BoxDecoration(
+                  color: AppTheme.interruptionColor.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppTheme.interruptionColor.withValues(alpha: 0.4),
+                    width: 1.5,
+                  ),
+                ),
+                child: Icon(
+                  Icons.exit_to_app_rounded,
+                  color: AppTheme.interruptionColor,
+                  size: 28.sp,
+                ),
+              ),
+              SizedBox(height: 16.h),
+
+              // Title
+              Text(
+                'Leave without insights?',
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 20.sp,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 10.h),
+
+              // Body
+              Text(
+                'This session won\'t be analyzed. Your AI insights, '
+                'communication scores, and resolution plan won\'t be generated.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 14.sp,
+                  height: 1.5,
+                ),
+              ),
+              SizedBox(height: 28.h),
+
+              // "Yes, leave" button
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  style: TextButton.styleFrom(
+                    backgroundColor:
+                        AppTheme.interruptionColor.withValues(alpha: 0.15),
+                    foregroundColor: AppTheme.interruptionColor,
+                    padding: EdgeInsets.symmetric(vertical: 14.h),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                      side: BorderSide(
+                        color: AppTheme.interruptionColor.withValues(alpha: 0.4),
+                      ),
+                    ),
+                  ),
+                  child: Text(
+                    'Yes, leave session',
+                    style: TextStyle(
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: 12.h),
+
+              // "Go back to call" button
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppTheme.textSecondary,
+                    padding: EdgeInsets.symmetric(vertical: 14.h),
+                  ),
+                  child: Text(
+                    'Go back to call',
+                    style: TextStyle(fontSize: 15.sp),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _showErrorDialog(String message) {
@@ -656,7 +873,7 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
           _buildHeader(),
           if (_showInterruptionWarning) _buildInterruptionWarning(),
           SizedBox(height: 20.h),
-          _buildAIMessageCard(),
+          // _buildAIMessageCard(),
           SizedBox(height: 24.h),
           Expanded(child: _buildPartnerViews()),
           _buildControlsFooter(),
@@ -1264,13 +1481,13 @@ class _ZegoVoiceChatScreenState extends State<ZegoVoiceChatScreen>
                 : 'Enable Speaker (May Echo)',
           ),
 
-          // New AI Therapy Suggestion button
-          _buildOldControlButton(
-            onTap: _showNewAIMessage,
-            icon: Icons.psychology_rounded,
-            isActive: false,
-            tooltip: 'Get Therapy Suggestion',
-          ),
+          // // New AI Therapy Suggestion button
+          // _buildOldControlButton(
+          //   onTap: _showNewAIMessage,
+          //   icon: Icons.psychology_rounded,
+          //   isActive: false,
+          //   tooltip: 'Get Therapy Suggestion',
+          // ),
 
           // End session button
           _buildOldControlButton(

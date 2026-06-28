@@ -17,7 +17,7 @@
     <uses-feature android:name="android.hardware.microphone" android:required="true" />
     
     <application
-        android:label="Mend"
+        android:label="BridgeMend"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:enableOnBackInvokedCallback="true"

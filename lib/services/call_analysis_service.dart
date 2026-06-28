@@ -8,7 +8,7 @@ import '../config/api_config.dart';
 import '../models/call_analysis_result.dart';
 
 class CallAnalysisService {
-  static const Duration _timeout = Duration(seconds: 120);
+  static const Duration _timeout = Duration(seconds: 500);
 
   static String get _analyzeUrl =>
       '${ApiConfig.serverBaseUrl}/api/call/analyze';
